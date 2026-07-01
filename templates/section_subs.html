@@ -37,7 +37,7 @@
         <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
              style="background-color: {{ section.accent_color + '20' if section.accent_color else '#f0fdf4' }};">
           {% if sub.icon_image %}
-          <img src="/static/uploads/{{ sub.icon_image }}" alt="icon" class="w-full h-full object-cover">
+          <img src="/uploads/{{ sub.icon_image }}" alt="icon" class="w-full h-full object-cover">
           {% else %}
           <span class="text-3xl">{{ sub.icon }}</span>
           {% endif %}

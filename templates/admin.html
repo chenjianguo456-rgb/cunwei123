@@ -46,7 +46,7 @@
         <div class="flex flex-col sm:flex-row items-start gap-4">
           <div class="w-full sm:w-64 h-32 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden relative">
             {% if home_banner %}
-            <img id="bannerPreview" src="/static/uploads/{{ home_banner }}" alt="首页横幅" class="w-full h-full object-cover" onerror="this.classList.add('hidden'); document.getElementById('bannerPlaceholder').classList.remove('hidden');">
+            <img id="bannerPreview" src="/uploads/{{ home_banner }}" alt="首页横幅" class="w-full h-full object-cover" onerror="this.classList.add('hidden'); document.getElementById('bannerPlaceholder').classList.remove('hidden');">
             <div id="bannerPlaceholder" class="text-gray-400 text-sm text-center hidden">暂无图片<br>使用默认绿色背景</div>
             {% else %}
             <img id="bannerPreview" src="" alt="首页横幅" class="w-full h-full object-cover hidden" onload="this.classList.remove('hidden')" onerror="this.classList.add('hidden'); document.getElementById('bannerPlaceholder').classList.remove('hidden');">
@@ -122,7 +122,7 @@
                   <div class="flex items-center gap-2">
                     <div class="w-10 h-10 rounded bg-gray-100 border overflow-hidden flex items-center justify-center">
                       {% if s.icon_image %}
-                      <img src="/static/uploads/{{ s.icon_image }}" alt="icon" class="w-full h-full object-cover">
+                      <img src="/uploads/{{ s.icon_image }}" alt="icon" class="w-full h-full object-cover">
                       {% else %}
                       <span class="text-lg">{{ s.icon }}</span>
                       {% endif %}
@@ -767,7 +767,7 @@ async function loadSubSections() {
     return;
   }
   tbody.innerHTML = data.map(s => {
-    const iconImg = s.icon_image ? `<img src="/static/uploads/${s.icon_image}" alt="icon" class="w-full h-full object-cover">` : `<span class="text-lg">${s.icon || '📄'}</span>`;
+    const iconImg = s.icon_image ? `<img src="/uploads/${s.icon_image}" alt="icon" class="w-full h-full object-cover">` : `<span class="text-lg">${s.icon || '📄'}</span>`;
     const deleteImgBtn = s.icon_image ? `<button onclick="deleteSubSectionIcon(${s.id})" class="text-xs text-red-600 hover:underline">删</button>` : '';
     return `
     <tr class="border-b border-gray-50" data-sub-id="${s.id}">

@@ -7,8 +7,8 @@
 管理员账户：admin / admin123456
 """
 
-import os, json, re, datetime, io
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
+import os, json, re, datetime, io, base64
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, Response
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from openpyxl import Workbook, load_workbook
@@ -159,6 +159,15 @@ class DeletedRecord(db.Model):
     data = db.Column(db.Text, default='{}')
     deleted_by = db.Column(db.String(80), nullable=False)
     deleted_at = db.Column(db.DateTime, default=datetime.datetime.now)
+
+class UploadedImage(db.Model):
+    """存储上传的图片（base64），替代文件系统——云部署不会丢失"""
+    __tablename__ = 'uploaded_images'
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(200), unique=True, nullable=False)
+    mime_type = db.Column(db.String(50), default='image/png')
+    data_b64 = db.Column(db.Text, default='')  # base64编码的图片数据
+    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
 
 # ===================== 初始化数据 =====================
 
@@ -771,6 +780,52 @@ def api_admin_template(template_id):
 
 # ===================== 路由：文件上传（图片） =====================
 
+def save_image_to_db(filename, file_obj, mime_type='image/png'):
+    """将上传的图片以base64存入数据库，返回URL路径"""
+    file_obj.seek(0)
+    data = file_obj.read()
+    data_b64 = base64.b64encode(data).decode('utf-8')
+    # 删除同名旧记录
+    old = UploadedImage.query.filter_by(filename=filename).first()
+    if old:
+        old.data_b64 = data_b64
+        old.mime_type = mime_type
+    else:
+        img = UploadedImage(filename=filename, mime_type=mime_type, data_b64=data_b64)
+        db.session.add(img)
+    db.session.commit()
+    return f'/uploads/{filename}'
+
+def delete_image_from_db(filename):
+    """从数据库删除图片"""
+    img = UploadedImage.query.filter_by(filename=filename).first()
+    if img:
+        db.session.delete(img)
+        db.session.commit()
+        return True
+    return False
+
+def get_ext_mime(ext):
+    """根据扩展名返回mime类型"""
+    mime_map = {
+        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+        'gif': 'image/gif', 'webp': 'image/webp', 'bmp': 'image/bmp'
+    }
+    return mime_map.get(ext.lower(), 'image/png')
+
+@app.route('/uploads/<filename>')
+def serve_uploaded_image(filename):
+    """从数据库读取并返回上传的图片"""
+    img = UploadedImage.query.filter_by(filename=filename).first()
+    if img and img.data_b64:
+        data = base64.b64decode(img.data_b64)
+        return Response(data, mimetype=img.mime_type)
+    # 本地开发模式：回退到文件系统
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(filepath):
+        return send_file(filepath)
+    return 'Not Found', 404
+
 @app.route('/api/upload/banner', methods=['POST'])
 def upload_banner():
     if 'user_id' not in session or not session.get('is_admin'):
@@ -780,15 +835,13 @@ def upload_banner():
         return jsonify({'error': '请上传图片文件（png/jpg/gif/webp/bmp）'}), 400
     ext = file.filename.rsplit('.', 1)[1].lower()
     filename = f'home_banner.{ext}'
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    # 删除旧文件
+    # 删除旧图片（所有扩展名）
     for old_ext in ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']:
-        old_path = os.path.join(app.config['UPLOAD_FOLDER'], f'home_banner.{old_ext}')
-        if os.path.exists(old_path) and old_path != filepath:
-            os.remove(old_path)
-    file.save(filepath)
+        if old_ext != ext:
+            delete_image_from_db(f'home_banner.{old_ext}')
+    url = save_image_to_db(filename, file, get_ext_mime(ext))
     set_config('home_banner', filename)
-    return jsonify({'success': True, 'filename': filename, 'url': f'/static/uploads/{filename}'})
+    return jsonify({'success': True, 'filename': filename, 'url': url})
 
 @app.route('/api/upload/section_icon/<int:section_id>', methods=['POST'])
 def upload_section_icon(section_id):
@@ -800,16 +853,14 @@ def upload_section_icon(section_id):
         return jsonify({'error': '请上传图片文件'}), 400
     ext = file.filename.rsplit('.', 1)[1].lower()
     filename = f'section_icon_{section_id}.{ext}'
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    # 删除旧图标
+    # 删除旧图标（所有扩展名）
     for old_ext in ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']:
-        old_path = os.path.join(app.config['UPLOAD_FOLDER'], f'section_icon_{section_id}.{old_ext}')
-        if os.path.exists(old_path) and old_path != filepath:
-            os.remove(old_path)
-    file.save(filepath)
+        if old_ext != ext:
+            delete_image_from_db(f'section_icon_{section_id}.{old_ext}')
+    url = save_image_to_db(filename, file, get_ext_mime(ext))
     section.icon_image = filename
     db.session.commit()
-    return jsonify({'success': True, 'filename': filename, 'url': f'/static/uploads/{filename}'})
+    return jsonify({'success': True, 'filename': filename, 'url': url})
 
 @app.route('/api/upload/delete_banner', methods=['POST'])
 def delete_banner():
@@ -817,9 +868,7 @@ def delete_banner():
         return jsonify({'error': '无权限'}), 403
     filename = get_config('home_banner', '')
     if filename:
-        path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if os.path.exists(path):
-            os.remove(path)
+        delete_image_from_db(filename)
         set_config('home_banner', '')
     return jsonify({'success': True})
 
@@ -829,9 +878,7 @@ def delete_section_icon(section_id):
         return jsonify({'error': '无权限'}), 403
     section = Section.query.get_or_404(section_id)
     if section.icon_image:
-        path = os.path.join(app.config['UPLOAD_FOLDER'], section.icon_image)
-        if os.path.exists(path):
-            os.remove(path)
+        delete_image_from_db(section.icon_image)
         section.icon_image = ''
         db.session.commit()
     return jsonify({'success': True})
@@ -1149,15 +1196,13 @@ def upload_subsection_icon(subsection_id):
         return jsonify({'error': '请上传图片文件'}), 400
     ext = file.filename.rsplit('.', 1)[1].lower()
     filename = f'subsection_icon_{subsection_id}.{ext}'
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     for old_ext in ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']:
-        old_path = os.path.join(app.config['UPLOAD_FOLDER'], f'subsection_icon_{subsection_id}.{old_ext}')
-        if os.path.exists(old_path) and old_path != filepath:
-            os.remove(old_path)
-    file.save(filepath)
+        if old_ext != ext:
+            delete_image_from_db(f'subsection_icon_{subsection_id}.{old_ext}')
+    url = save_image_to_db(filename, file, get_ext_mime(ext))
     sub.icon_image = filename
     db.session.commit()
-    return jsonify({'success': True, 'filename': filename, 'url': f'/static/uploads/{filename}'})
+    return jsonify({'success': True, 'filename': filename, 'url': url})
 
 @app.route('/api/upload/delete_subsection_icon/<int:subsection_id>', methods=['POST'])
 def delete_subsection_icon(subsection_id):
@@ -1165,16 +1210,16 @@ def delete_subsection_icon(subsection_id):
         return jsonify({'error': '无权限'}), 403
     sub = SubSection.query.get_or_404(subsection_id)
     if sub.icon_image:
-        path = os.path.join(app.config['UPLOAD_FOLDER'], sub.icon_image)
-        if os.path.exists(path):
-            os.remove(path)
+        delete_image_from_db(sub.icon_image)
         sub.icon_image = ''
         db.session.commit()
     return jsonify({'success': True})
 
 # ===================== 启动入口 =====================
 
+# 生产环境（gunicorn）导入时自动初始化数据库
+init_db()
+
 if __name__ == '__main__':
-    init_db()
-    # 生产环境建议关闭debug，使用 0.0.0.0 让局域网/公网可访问
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # 本地开发模式
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)

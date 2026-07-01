@@ -19,8 +19,10 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f0f5f0;c
 .btn:hover{background:#2e7d32;transform:translateY(-1px)}
 .highlight{background:#e8f5e9;padding:3px 8px;border-radius:4px;color:#2e7d32;font-weight:bold}
 .warning{background:#fff3cd;border-left:4px solid #ffc107;padding:12px;border-radius:4px;margin:10px 0}
+.danger{background:#fde8e8;border-left:4px solid #e53e3e;padding:12px;border-radius:4px;margin:10px 0}
 ul{margin:10px 0;padding-left:20px}
 li{margin:5px 0}
+.tag{display:inline-block;background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:4px;font-size:13px;margin:2px}
 </style>
 </head>
 <body>
@@ -28,60 +30,93 @@ li{margin:5px 0}
 
 <div class="header">
 <h1>🌾 村委资料共享管理系统</h1>
-<p>云端部署 · 24小时在线 · 完全免费</p>
+<p>云端部署 · 24小时在线 · 数据永久保存 · 完全免费</p>
 </div>
 
 <!-- 第一步 -->
 <div class="card">
 <h2><span class="step-num">1</span>注册 Render 账号（2分钟）</h2>
-<p>打开浏览器，访问：</p>
-<a class="btn" href="https://render.com" target="_blank">打开 Render.com 注册</a>
-<p style="margin-top:10px">点击右上角 <span class="highlight">Get Started</span> → 选择 <span class="highlight">Sign up with GitHub</span> 或用邮箱注册</p>
-<div class="warning">
-💡 <b>提示：</b>不需要绑定信用卡，免费版完全够用！
-</div>
+<a class="btn" href="https://render.com" target="_blank">打开 Render.com</a>
+<p style="margin-top:10px">点击右上角 <span class="highlight">Get Started</span> → 用 GitHub 账号注册登录</p>
+<div class="warning">💡 不需要绑定信用卡，免费版完全够用！</div>
 </div>
 
 <!-- 第二步 -->
 <div class="card">
-<h2><span class="step-num">2</span>上传代码到 GitHub（1分钟）</h2>
-<p>在浏览器中操作：</p>
+<h2><span class="step-num">2</span>创建 PostgreSQL 数据库（关键！）</h2>
+<p>这一步确保<b>数据不会丢失</b>，关机、重启都不影响。</p>
 <ol>
-<li>访问 <a href="https://github.com/new">github.com/new</a> 创建仓库，取名 <span class="highlight">cunwei</span></li>
-<li>保持 Public（公开），点击 Create repository</li>
-<li>在创建后的页面，点击 <span class="highlight">uploading an existing file</span></li>
-<li>将 <b>整个 cunwei_app 文件夹拖入浏览器窗口</b></li>
-<li>点击 <span class="highlight">Commit changes</span> 提交</li>
+<li>登录 Render 后，点击 <span class="highlight">New +</span></li>
+<li>选择 <span class="highlight">PostgreSQL</span></li>
+<li>填写：
+<ul>
+<li>Database Name: <span class="highlight">cunwei-db</span></li>
+<li>User: 保持默认</li>
+<li>Region: 选最近的（如 Singapore）</li>
+<li>Database Version: <span class="highlight">16</span>（默认即可）</li>
+<li>Plan: <span class="highlight">Free</span> ← 必须选这个！</li>
+</ul>
+</li>
+<li>点击 <span class="highlight">Create Database</span></li>
 </ol>
+<p style="margin-top:10px">⏳ 等待1-2分钟创建完成。</p>
+<p>创建后，找到 <b>Connections</b> 区域，复制 <span class="highlight">Internal Database URL</span>（以 postgres:// 开头的那串）</p>
 </div>
 
 <!-- 第三步 -->
 <div class="card">
-<h2><span class="step-num">3</span> 一键部署（1分钟）</h2>
-<p>回到 Render.com，按以下步骤操作：</p>
+<h2><span class="step-num">3</span>创建 Web 服务（部署程序）</h2>
 <ol>
-<li>点击顶部 <span class="highlight">New +</span> → 选择 <span class="highlight">Web Service</span></li>
-<li>授权 GitHub → 选择 <span class="highlight">cunwei</span> 仓库</li>
-<li><b>关键设置：</b>
+<li>回到 Dashboard，点击 <span class="highlight">New +</span> → <span class="highlight">Web Service</span></li>
+<li>选择你刚推送的仓库 <span class="highlight">cunwei123</span></li>
+<li>填写设置：
 <ul>
 <li>Name: <span class="highlight">cunwei</span></li>
 <li>Runtime: <span class="highlight">Python 3</span></li>
-<li>Build Command: <span class="highlight">pip install -r requirements.txt</span></li>
-<li>Start Command: <span class="highlight">python app.py</span></li>
+<li>Build Command: <div class="code-block">pip install -r requirements.txt</div></li>
+<li>Start Command: <div class="code-block">gunicorn app:app --workers 1 --threads 2 --timeout 120</div></li>
 </ul>
 </li>
-<li>往下拉，选择 <span class="highlight">Free</span> 方案</li>
+<li><b>添加环境变量</b>（关键步骤！）：
+<ul>
+<li>找到 <span class="highlight">Environment</span> 区域</li>
+<li>点击 <span class="highlight">Add Environment Variable</span></li>
+<li>Key 填: <span class="highlight">DATABASE_URL</span></li>
+<li>Value 填: 刚才复制的 PostgreSQL Internal URL</li>
+</ul>
+</li>
+<li>选择 <span class="highlight">Free</span> 方案</li>
 <li>点击 <span class="highlight">Create Web Service</span></li>
 </ol>
-<p style="margin-top:10px;">⏳ 等待3-5分钟，部署完成后你会看到一个公网地址：</p>
+</div>
+
+<!-- 第四步 -->
+<div class="card">
+<h2><span class="step-num">4</span>等待部署完成（3-5分钟）</h2>
+<p>页面会显示构建日志，等待出现 <span class="highlight">"Deploy live"</span> 即表示成功。</p>
+<p>你会得到一个公网地址：</p>
 <div class="code-block">https://cunwei.onrender.com</div>
 </div>
 
 <!-- 完成 -->
 <div class="card" style="text-align:center;background:linear-gradient(135deg,#e8f5e9,#c8e6c9)">
-<h2 style="color:#2e7d32">🎉 完成！</h2>
-<p>你的系统将 <b>24小时在线</b>，关机也能用！</p>
-<p>默认管理员账号：<span class="highlight">admin</span> / <span class="highlight">admin123456</span></p>
+<h2 style="color:#2e7d32">🎉 部署完成！</h2>
+<p>你的系统现在 <b>24小时在线</b>，数据永久保存！</p>
+<p>管理员账号：<span class="highlight">admin</span> / <span class="highlight">admin123456</span></p>
+<p style="margin-top:10px;font-size:13px;color:#666">电脑关机、手机访问、异地访问都没问题</p>
+</div>
+
+<!-- 常见问题 -->
+<div class="card">
+<h2>❓ 常见问题</h2>
+<p><b>Q: 免费版数据库会过期吗？</b></p>
+<p>A: Render 免费 PostgreSQL 有效期90天。到期后可重新创建，或升级到付费版（$7/月）。</p>
+<br>
+<p><b>Q: 免费版 Web 服务会休眠吗？</b></p>
+<p>A: 15分钟无访问会自动休眠，下次访问时自动唤醒（约30秒）。不影响数据，只是首次打开稍慢。</p>
+<br>
+<p><b>Q: 数据会丢失吗？</b></p>
+<p>A: 不会！所有数据存在 PostgreSQL 数据库中，图片也存在数据库里。重启、重新部署都不会丢失。</p>
 </div>
 
 </div>

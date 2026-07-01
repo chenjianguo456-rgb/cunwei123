@@ -1,11 +1,8 @@
-# 数据库文件
-*.db
-instance/
-
 # 日志文件
 *.log
 flask_output.log
 flask_test.log
+flask_run.log
 
 # 上传的文件（生产环境存数据库）
 static/uploads/*

@@ -47,6 +47,27 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
+# ===================== 数据库会话管理 =====================
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    """确保每个请求结束后正确回滚或关闭数据库会话"""
+    try:
+        if exception:
+            db.session.rollback()
+    finally:
+        db.session.remove()
+
+@app.errorhandler(Exception)
+def handle_exception(error):
+    """全局异常处理：回滚会话并返回友好错误信息"""
+    db.session.rollback()
+    app.logger.error(f"Unhandled error: {error}", exc_info=True)
+    # 如果是AJAX请求，返回JSON
+    if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'error': '服务器内部错误，请稍后重试'}), 500
+    return '服务器内部错误，请稍后重试', 500
+
 # ===================== 工具函数 =====================
 
 def validate_id_card(id_card):
@@ -200,10 +221,21 @@ def set_config(key, value):
     else:
         cfg = SiteConfig(key=key, value=value)
         db.session.add(cfg)
-    db.session.commit()
+    safe_commit()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
+
+def safe_commit(label=''):
+    """安全提交：捕获异常、回滚、记录日志，并抛出带详细信息的错误"""
+    try:
+        safe_commit()
+    except Exception as e:
+        db.session.rollback()
+        msg = f"[DB ERROR] {label}: {type(e).__name__}: {str(e)}"
+        app.logger.error(msg, exc_info=True)
+        print(msg)
+        raise
 
 def init_db():
     with app.app_context():
@@ -223,7 +255,7 @@ def init_db():
                 is_admin=True
             )
             db.session.add(admin)
-            db.session.commit()
+            safe_commit()
             print("[INIT] 管理员账户已创建：admin / admin123456")
         
         # 创建预设功能分区
@@ -238,7 +270,7 @@ def init_db():
             ]
             for s in sections:
                 db.session.add(Section(**s))
-            db.session.commit()
+            safe_commit()
             print("[INIT] 6个功能分区已创建")
         
         # 为每个分区创建默认模板
@@ -312,7 +344,7 @@ def init_db():
                         columns=json.dumps(cols, ensure_ascii=False)
                     )
                     db.session.add(t)
-            db.session.commit()
+            safe_commit()
             print("[INIT] 默认模板已创建")
 
 # ===================== 路由：页面 =====================
@@ -361,7 +393,7 @@ def register():
                 is_admin=False
             )
             db.session.add(user)
-            db.session.commit()
+            safe_commit()
             flash('注册成功，请登录', 'success')
             return redirect(url_for('login'))
     return render_template('register.html')
@@ -446,7 +478,7 @@ def api_save_records():
     columns = json.loads(template.columns) if template else []
     
     # 先删除旧记录（全量替换模式，简化实现）
-    Record.query.filter_by(section_id=section_id, template_id=template_id).delete()
+    Record.query.filter_by(section_id=section_id, template_id=template_id).delete(synchronize_session=False)
     
     saved = 0
     for row in rows:
@@ -466,7 +498,7 @@ def api_save_records():
         rec = Record(section_id=section_id, template_id=template_id, data=json.dumps(row, ensure_ascii=False))
         db.session.add(rec)
         saved += 1
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'saved': saved})
 
 @app.route('/api/records/delete/<int:record_id>', methods=['POST'])
@@ -485,7 +517,7 @@ def api_delete_record(record_id):
     )
     db.session.add(del_rec)
     db.session.delete(rec)
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'deleted_id': del_rec.id})
 
 @app.route('/api/records/batch_delete', methods=['POST'])
@@ -509,7 +541,7 @@ def api_batch_delete_records():
             db.session.add(del_rec)
             db.session.delete(rec)
             deleted_ids.append(del_rec.id)
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'deleted_count': len(deleted_ids)})
 
 # 回收站 API
@@ -543,7 +575,7 @@ def api_restore_record(deleted_id):
     )
     db.session.add(rec)
     db.session.delete(del_rec)
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'restored_id': rec.id})
 
 @app.route('/api/recycle/clear', methods=['POST'])
@@ -560,7 +592,7 @@ def api_clear_recycle():
         query = query.filter_by(subsection_id=target_id)
     count = query.count()
     query.delete(synchronize_session=False)
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'cleared_count': count})
 
 # 搜索 API
@@ -690,11 +722,11 @@ def api_import(section_id):
             return jsonify({'error': f'导入失败，共发现 {len(errors)} 条身份证错误', 'errors': errors}), 400
         
         # 保存
-        Record.query.filter_by(section_id=section_id, template_id=template.id).delete()
+        Record.query.filter_by(section_id=section_id, template_id=template.id).delete(synchronize_session=False)
         for item in rows:
             rec = Record(section_id=section_id, template_id=template.id, data=json.dumps(item, ensure_ascii=False))
             db.session.add(rec)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True, 'imported': len(rows)})
     except Exception as e:
         return jsonify({'error': f'导入失败: {str(e)}'}), 400
@@ -720,7 +752,7 @@ def api_admin_sections():
             accent_color=data.get('accent_color', '')
         )
         db.session.add(s)
-        db.session.commit()
+        safe_commit()
         # 自动创建默认模板
         default_cols = [
             {"key": "name", "label": "名称", "type": "text"},
@@ -732,7 +764,7 @@ def api_admin_sections():
         ]
         t = Template(section_id=s.id, name=f"{s.name}默认模板", columns=json.dumps(default_cols, ensure_ascii=False))
         db.session.add(t)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True, 'id': s.id})
 
 @app.route('/api/admin/sections/<int:section_id>', methods=['PUT', 'DELETE'])
@@ -749,13 +781,14 @@ def api_admin_section(section_id):
         s.text_color = data.get('text_color', s.text_color)
         s.accent_color = data.get('accent_color', s.accent_color)
         s.description = data.get('description', s.description)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True})
     elif request.method == 'DELETE':
-        Record.query.filter_by(section_id=section_id).delete()
-        Template.query.filter_by(section_id=section_id).delete()
+        Record.query.filter_by(section_id=section_id).delete(synchronize_session=False)
+        Template.query.filter_by(section_id=section_id).delete(synchronize_session=False)
+        SubSection.query.filter_by(section_id=section_id).delete(synchronize_session=False)
         db.session.delete(s)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True})
 
 # ===================== 路由：管理API（模板） =====================
@@ -778,7 +811,7 @@ def api_admin_templates():
             columns=json.dumps(data.get('columns', []), ensure_ascii=False)
         )
         db.session.add(t)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True, 'id': t.id})
 
 @app.route('/api/admin/templates/<int:template_id>', methods=['PUT', 'DELETE'])
@@ -790,12 +823,12 @@ def api_admin_template(template_id):
         data = request.get_json()
         t.name = data.get('name', t.name)
         t.columns = json.dumps(data.get('columns', []), ensure_ascii=False)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True})
     elif request.method == 'DELETE':
-        Record.query.filter_by(template_id=template_id).delete()
+        Record.query.filter_by(template_id=template_id).delete(synchronize_session=False)
         db.session.delete(t)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True})
 
 # ===================== 路由：文件上传（图片） =====================
@@ -813,7 +846,7 @@ def save_image_to_db(filename, file_obj, mime_type='image/png'):
     else:
         img = UploadedImage(filename=filename, mime_type=mime_type, data_b64=data_b64)
         db.session.add(img)
-    db.session.commit()
+    safe_commit()
     return f'/uploads/{filename}'
 
 def delete_image_from_db(filename):
@@ -821,7 +854,7 @@ def delete_image_from_db(filename):
     img = UploadedImage.query.filter_by(filename=filename).first()
     if img:
         db.session.delete(img)
-        db.session.commit()
+        safe_commit()
         return True
     return False
 
@@ -879,7 +912,7 @@ def upload_section_icon(section_id):
             delete_image_from_db(f'section_icon_{section_id}.{old_ext}')
     url = save_image_to_db(filename, file, get_ext_mime(ext))
     section.icon_image = filename
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'filename': filename, 'url': url})
 
 @app.route('/api/upload/delete_banner', methods=['POST'])
@@ -900,7 +933,7 @@ def delete_section_icon(section_id):
     if section.icon_image:
         delete_image_from_db(section.icon_image)
         section.icon_image = ''
-        db.session.commit()
+        safe_commit()
     return jsonify({'success': True})
 
 # ===================== 路由：管理API（账户） =====================
@@ -918,7 +951,7 @@ def api_admin_change_password():
     if not check_password_hash(user.password_hash, old_password):
         return jsonify({'error': '原密码错误'}), 400
     user.password_hash = generate_password_hash(new_password)
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True})
 
 @app.route('/api/admin/users', methods=['POST'])
@@ -934,7 +967,7 @@ def api_admin_add_user():
         return jsonify({'error': '用户名已存在'}), 400
     u = User(username=username, password_hash=generate_password_hash(password), is_admin=False)
     db.session.add(u)
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'id': u.id})
 
 @app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
@@ -945,7 +978,7 @@ def api_admin_delete_user(user_id):
     if u.username == 'admin':
         return jsonify({'error': '不能删除默认管理员'}), 400
     db.session.delete(u)
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True})
 
 # ===================== 路由：子功能数据API =====================
@@ -987,7 +1020,7 @@ def api_save_subsection_records():
         return jsonify({'error': '子功能不存在'}), 404
     columns = json.loads(sub.columns) if sub.columns else []
     
-    Record.query.filter_by(subsection_id=subsection_id).delete()
+    Record.query.filter_by(subsection_id=subsection_id).delete(synchronize_session=False)
     
     saved = 0
     for row in rows:
@@ -1006,7 +1039,7 @@ def api_save_subsection_records():
                      data=json.dumps(row, ensure_ascii=False))
         db.session.add(rec)
         saved += 1
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'saved': saved})
 
 @app.route('/api/subsections/export/<int:subsection_id>')
@@ -1143,12 +1176,12 @@ def api_subsection_import(subsection_id):
         if errors:
             return jsonify({'error': f'导入失败，共发现 {len(errors)} 条身份证错误', 'errors': errors}), 400
         
-        Record.query.filter_by(subsection_id=subsection_id).delete()
+        Record.query.filter_by(subsection_id=subsection_id).delete(synchronize_session=False)
         for item in rows:
             rec = Record(section_id=sub.section_id, template_id=0, subsection_id=subsection_id, 
                          data=json.dumps(item, ensure_ascii=False))
             db.session.add(rec)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True, 'imported': len(rows)})
     except Exception as e:
         return jsonify({'error': f'导入失败: {str(e)}'}), 400
@@ -1182,7 +1215,7 @@ def api_admin_subsections():
             columns=json.dumps(data.get('columns', []), ensure_ascii=False)
         )
         db.session.add(sub)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True, 'id': sub.id})
 
 @app.route('/api/admin/subsections/<int:subsection_id>', methods=['PUT', 'DELETE'])
@@ -1198,12 +1231,12 @@ def api_admin_subsection(subsection_id):
         sub.sort_order = data.get('sort_order', sub.sort_order)
         if 'columns' in data:
             sub.columns = json.dumps(data.get('columns', []), ensure_ascii=False)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True})
     elif request.method == 'DELETE':
-        Record.query.filter_by(subsection_id=subsection_id).delete()
+        Record.query.filter_by(subsection_id=subsection_id).delete(synchronize_session=False)
         db.session.delete(sub)
-        db.session.commit()
+        safe_commit()
         return jsonify({'success': True})
 
 @app.route('/api/upload/subsection_icon/<int:subsection_id>', methods=['POST'])
@@ -1221,7 +1254,7 @@ def upload_subsection_icon(subsection_id):
             delete_image_from_db(f'subsection_icon_{subsection_id}.{old_ext}')
     url = save_image_to_db(filename, file, get_ext_mime(ext))
     sub.icon_image = filename
-    db.session.commit()
+    safe_commit()
     return jsonify({'success': True, 'filename': filename, 'url': url})
 
 @app.route('/api/upload/delete_subsection_icon/<int:subsection_id>', methods=['POST'])
@@ -1232,7 +1265,7 @@ def delete_subsection_icon(subsection_id):
     if sub.icon_image:
         delete_image_from_db(sub.icon_image)
         sub.icon_image = ''
-        db.session.commit()
+        safe_commit()
     return jsonify({'success': True})
 
 # ===================== 启动入口 =====================

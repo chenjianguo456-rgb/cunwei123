@@ -229,7 +229,7 @@ def allowed_file(filename):
 def safe_commit(label=''):
     """安全提交：捕获异常、回滚、记录日志，并抛出带详细信息的错误"""
     try:
-        safe_commit()
+        db.session.commit()
     except Exception as e:
         db.session.rollback()
         msg = f"[DB ERROR] {label}: {type(e).__name__}: {str(e)}"

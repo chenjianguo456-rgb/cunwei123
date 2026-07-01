@@ -10,6 +10,7 @@
 import os, json, re, datetime, io, base64
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, Response
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 from werkzeug.security import generate_password_hash, check_password_hash
 from openpyxl import Workbook, load_workbook
 
@@ -178,7 +179,7 @@ class Record(db.Model):
     __tablename__ = 'records'
     id = db.Column(db.Integer, primary_key=True)
     section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=False)
-    template_id = db.Column(db.Integer, db.ForeignKey('templates.id'), nullable=False)
+    template_id = db.Column(db.Integer, db.ForeignKey('templates.id'), nullable=True)  # 子分区记录无模板
     subsection_id = db.Column(db.Integer, db.ForeignKey('sub_sections.id'), nullable=True)
     data = db.Column(db.Text, default='{}')  # JSON格式行数据
     created_at = db.Column(db.DateTime, default=datetime.datetime.now)
@@ -188,7 +189,7 @@ class DeletedRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     original_id = db.Column(db.Integer, nullable=False)
     section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=False)
-    template_id = db.Column(db.Integer, db.ForeignKey('templates.id'), nullable=False)
+    template_id = db.Column(db.Integer, db.ForeignKey('templates.id'), nullable=True)  # 子分区记录无模板
     subsection_id = db.Column(db.Integer, db.ForeignKey('sub_sections.id'), nullable=True)
     data = db.Column(db.Text, default='{}')
     deleted_by = db.Column(db.String(80), nullable=False)
@@ -247,6 +248,17 @@ def init_db():
             print("[INIT] ⚠️ 警告：使用 SQLite，数据可能在重启后丢失！DATABASE_URL环境变量可能未设置")
         
         db.create_all()
+        
+        # PostgreSQL 兼容性：确保 records / deleted_records 的 template_id 允许 NULL（子分区记录无模板）
+        if 'postgresql' in db_uri:
+            try:
+                db.session.execute(text("ALTER TABLE records ALTER COLUMN template_id DROP NOT NULL"))
+                db.session.execute(text("ALTER TABLE deleted_records ALTER COLUMN template_id DROP NOT NULL"))
+                safe_commit()
+                print("[INIT] 已兼容 PostgreSQL：template_id 允许 NULL")
+            except Exception as e:
+                print(f"[INIT] 兼容调整跳过（可能已生效）: {e}")
+        
         # 创建管理员账户
         if not User.query.filter_by(username='admin').first():
             admin = User(
@@ -1035,7 +1047,7 @@ def api_save_subsection_records():
             if col.get('type') == 'auto':
                 row[col['key']] = auto_fill_value(col, row)
         
-        rec = Record(section_id=sub.section_id, template_id=0, subsection_id=subsection_id, 
+        rec = Record(section_id=sub.section_id, template_id=None, subsection_id=subsection_id, 
                      data=json.dumps(row, ensure_ascii=False))
         db.session.add(rec)
         saved += 1

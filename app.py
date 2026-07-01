@@ -18,9 +18,22 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 # 生产环境配置
 is_production = os.environ.get('RENDER') or os.environ.get('PYTHONANYWHERE_DOMAIN')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cunwei-2024-secret-key-8f3a')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///cunwei.db')
+
+# 数据库URI处理：Render的PostgreSQL地址以postgres://开头，SQLAlchemy需要postgresql://
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///cunwei.db')
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+elif database_url.startswith('postgresql://') and '+psycopg2' not in database_url:
+    # 确保使用psycopg2驱动
+    database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JSON_AS_ASCII'] = False
+# 生产环境数据库连接池配置
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
 
 # 生产环境使用绝对路径
 if is_production:
@@ -194,6 +207,13 @@ def allowed_file(filename):
 
 def init_db():
     with app.app_context():
+        # 打印当前数据库类型（用于调试，不暴露密码）
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if 'postgresql' in db_uri:
+            print("[INIT] 使用 PostgreSQL 云数据库 ✅")
+        else:
+            print("[INIT] ⚠️ 警告：使用 SQLite，数据可能在重启后丢失！DATABASE_URL环境变量可能未设置")
+        
         db.create_all()
         # 创建管理员账户
         if not User.query.filter_by(username='admin').first():

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>{{ target_name }} - 村委资料共享系统</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif; }
+  .nav-blur { backdrop-filter: blur(12px); background: rgba(255,255,255,0.92); }
+  .table-container { -webkit-overflow-scrolling: touch; }
+  .input-cell {
+    @apply w-full px-2 py-2 text-sm border border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 outline-none bg-white;
+  }
+  .input-cell.error { border-color: #ef4444; background-color: #fef2f2; }
+  .input-cell.auto { background-color: #f0fdf4; color: #166534; font-weight: 500; }
+  .select-cell {
+    @apply w-full px-2 py-2 text-sm border border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 outline-none bg-white;
+  }
+  tr:nth-child(even) { background-color: #fafafa; }
+  .btn { @apply px-4 py-2 rounded-xl text-sm font-medium transition active:scale-95; }
+  .btn-primary { @apply bg-green-600 text-white hover:bg-green-700 shadow; }
+  .btn-secondary { @apply bg-gray-100 text-gray-700 hover:bg-gray-200; }
+  .btn-danger { @apply bg-red-50 text-red-600 hover:bg-red-100; }
+  .btn-amber { @apply bg-amber-50 text-amber-700 hover:bg-amber-100; }
+  .modal-bg { @apply fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4; }
+  .modal-panel { @apply bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-24">
+  <!-- 导航 -->
+  <div class="nav-blur sticky top-0 z-50 border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2 overflow-hidden">
+        <a href="{% if target_type == 'subsection' %}/section/{{ section_id }}{% else %}/{% endif %}" class="text-gray-400 hover:text-gray-600 text-lg shrink-0">‹</a>
+        <span class="text-xl">{{ target_icon }}</span>
+        <h1 class="text-lg font-bold text-gray-800 truncate">{{ target_name }}</h1>
+      </div>
+      <div class="flex items-center space-x-2 shrink-0">
+        <button onclick="saveData()" class="btn btn-primary">💾 保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 搜索筛选栏 -->
+  <div class="max-w-7xl mx-auto px-4 mt-4">
+    <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-wrap gap-2 items-center">
+      <div class="flex-1 min-w-[200px]">
+        <input type="text" id="searchKeyword" placeholder="🔍 搜索姓名或身份证号..." 
+          class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none text-sm"
+          oninput="debounceSearch()">
+      </div>
+      <select id="searchGender" onchange="debounceSearch()" class="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:border-green-500 outline-none">
+        <option value="">全部性别</option>
+        <option value="男">男</option>
+        <option value="女">女</option>
+      </select>
+      <select id="searchAge" onchange="debounceSearch()" class="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:border-green-500 outline-none">
+        <option value="">全部年龄</option>
+        <option value="0-17">0-17岁</option>
+        <option value="18-35">18-35岁</option>
+        <option value="36-59">36-59岁</option>
+        <option value="60+">60岁以上</option>
+      </select>
+      <button onclick="clearSearch()" class="btn btn-secondary text-xs">清空</button>
+    </div>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="max-w-7xl mx-auto px-4 mt-4">
+    <div class="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-wrap gap-2 items-center justify-between">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="addRow()" class="btn btn-secondary">➕ 添加行</button>
+        <button onclick="batchDelete()" class="btn btn-danger">🗑️ 批量删除</button>
+        <button onclick="exportExcel()" class="btn btn-secondary">📥 导出Excel</button>
+        <label class="btn btn-secondary cursor-pointer inline-flex items-center">
+          📤 导入Excel
+          <input type="file" id="importFile" accept=".xlsx,.xls" class="hidden" onchange="importExcel(this)">
+        </label>
+        <button onclick="showStats()" class="btn btn-secondary">📊 数据统计</button>
+        <button onclick="showRecycleBin()" class="btn btn-amber">🗂️ 回收站</button>
+      </div>
+      <div class="text-xs text-gray-400">
+        {% if target_type == 'section' %}主功能区{% else %}子功能{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 统计面板 -->
+  <div id="statsPanel" class="hidden max-w-7xl mx-auto px-4 mt-4">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold text-gray-800">📊 数据统计报表</h2>
+        <button onclick="hideStats()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+      </div>
+      <div id="statsContent" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- ECharts 容器 -->
+        <div class="border rounded-xl p-4 bg-gray-50">
+          <h3 class="font-bold text-gray-800 mb-2 text-center">🏠 户主信息</h3>
+          <div id="householdChart" style="height: 200px;"></div>
+        </div>
+        <div class="border rounded-xl p-4 bg-gray-50">
+          <h3 class="font-bold text-gray-800 mb-2 text-center">👥 男女比例</h3>
+          <div id="genderChart" style="height: 200px;"></div>
+        </div>
+        <div class="border rounded-xl p-4 bg-gray-50">
+          <h3 class="font-bold text-gray-800 mb-2 text-center">📊 年龄分布</h3>
+          <div id="ageChart" style="height: 200px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 回收站弹窗 -->
+  <div id="recycleModal" class="hidden modal-bg">
+    <div class="modal-panel">
+      <div class="p-4 border-b flex justify-between items-center">
+        <h2 class="font-bold text-gray-800">🗂️ 回收站（已删除记录）</h2>
+        <button onclick="hideRecycleBin()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+      </div>
+      <div class="p-4 overflow-auto flex-1">
+        <div class="flex justify-between items-center mb-3">
+          <span id="recycleCount" class="text-sm text-gray-500">共 0 条</span>
+          <button onclick="clearRecycleBin()" class="btn btn-danger text-xs px-2 py-1">⚠️ 清空回收站</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-gray-50 text-left text-gray-500"><th class="px-2 py-2">数据</th><th class="px-2 py-2">删除者</th><th class="px-2 py-2">删除时间</th><th class="px-2 py-2">操作</th></tr></thead>
+            <tbody id="recycleBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导入预览弹窗 -->
+  <div id="importModal" class="hidden modal-bg">
+    <div class="modal-panel" style="max-width: 600px;">
+      <div class="p-4 border-b flex justify-between items-center">
+        <h2 class="font-bold text-gray-800">📤 Excel导入预览</h2>
+        <button onclick="cancelImport()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+      </div>
+      <div class="p-4">
+        <p class="text-sm text-gray-500 mb-3">共检测到 <span id="importPreviewCount" class="font-bold">0</span> 条数据</p>
+        <div class="flex gap-2 mb-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="importMode" value="replace" checked class="accent-green-600">
+            <span class="text-sm">覆盖现有数据（先清空再导入）</span>
+          </label>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="confirmImport()" class="btn btn-primary flex-1">确认导入</button>
+          <button onclick="cancelImport()" class="btn btn-secondary flex-1">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 数据表格 -->
+  <div class="max-w-7xl mx-auto px-4 mt-4">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="table-container overflow-x-auto">
+        <table class="w-full min-w-[800px]" id="dataTable">
+          <thead>
+            <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              <th class="px-2 py-3 w-10 text-center"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
+              <th class="px-3 py-3 w-14 text-center">序号</th>
+              {% for col in columns %}
+              <th class="px-3 py-3">{{ col.label }}</th>
+              {% endfor %}
+              <th class="px-3 py-3 w-20 text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="text-sm text-gray-700">
+            <!-- JS填充 -->
+          </tbody>
+        </table>
+      </div>
+      <div id="emptyTip" class="hidden py-12 text-center text-gray-400">
+        <div class="text-4xl mb-2">📝</div>
+        <p>暂无数据，点击“添加行”开始录入</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提示条 -->
+  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-sm text-white hidden transition max-w-[90vw]"></div>
+
+<script>
+// 模板列定义
+const columns = {{ columns | tojson }};
+const targetType = '{{ target_type }}';
+const targetId = {{ target_id }};
+const sectionId = {{ section_id }};
+const templateId = {{ template_id if template_id else 'null' }};
+
+const RECORDS_URL = targetType === 'section' ? `/api/records/${sectionId}` : `/api/subsections/records/${targetId}`;
+const SAVE_URL = targetType === 'section' ? '/api/records/save' : '/api/subsections/records/save';
+const EXPORT_URL = targetType === 'section' ? `/api/export/${sectionId}` : `/api/subsections/export/${targetId}`;
+const IMPORT_URL = targetType === 'section' ? `/api/import/${sectionId}` : `/api/subsections/import/${targetId}`;
+const STATS_URL = targetType === 'section' ? `/api/stats/section/${sectionId}` : `/api/stats/subsection/${targetId}`;
+const RECYCLE_URL = `/api/recycle/${targetType}/${targetType === 'section' ? sectionId : targetId}`;
+const BATCH_DELETE_URL = '/api/records/batch_delete';
+const SEARCH_URL = `/api/search/${targetType}/${targetType === 'section' ? sectionId : targetId}`;
+
+let allRows = []; // 全部数据
+let displayRows = []; // 筛选后显示的数据
+let nextTempId = 1;
+let selectedIds = new Set();
+let searchTimer = null;
+let pendingImportData = null; // 待导入的数据
+
+// 身份证工具
+function validateIdCard(id) {
+  if (!id || id.length !== 18) return false;
+  const reg = /^\d{17}[\dXx]$/;
+  if (!reg.test(id)) return false;
+  const weights = [7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2];
+  const checkCodes = ['1','0','X','9','8','7','6','5','4','3','2'];
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += parseInt(id[i]) * weights[i];
+  return checkCodes[sum % 11].toUpperCase() === id[17].toUpperCase();
+}
+function getGender(id) {
+  if (!id || id.length < 17) return '';
+  return parseInt(id[16]) % 2 === 0 ? '女' : '男';
+}
+function getAge(id) {
+  if (!id || id.length < 14) return '';
+  const year = parseInt(id.substring(6,10));
+  const month = parseInt(id.substring(10,12));
+  const day = parseInt(id.substring(12,14));
+  const now = new Date();
+  let age = now.getFullYear() - year;
+  if (now.getMonth() + 1 < month || (now.getMonth() + 1 === month && now.getDate() < day)) age--;
+  return age;
+}
+
+function updateAutoField(idx, key, val) {
+  const input = document.querySelector(`input[data-row="${idx}"][data-key="${key}"]`);
+  if (input) input.value = val;
+}
+
+function onCellChange(idx, key, value) {
+  const row = displayRows[idx];
+  row[key] = value;
+  const col = columns.find(c => c.key === key);
+  if (col && col.type === 'id_card') {
+    columns.forEach(c => {
+      if (c.type === 'auto') {
+        if (c.source === 'id_card_gender') { row[c.key] = getGender(value); updateAutoField(idx, c.key, row[c.key]); }
+        if (c.source === 'id_card_age') { row[c.key] = getAge(value); updateAutoField(idx, c.key, row[c.key]); }
+      }
+    });
+    const input = document.querySelector(`input[data-row="${idx}"][data-key="${key}"]`);
+    if (input) {
+      if (value.length === 18) {
+        if (!validateIdCard(value)) input.classList.add('error');
+        else input.classList.remove('error');
+      } else if (value.length < 18) {
+        input.classList.remove('error');
+      }
+    }
+  }
+}
+function onCellBlur(idx, key, value) {
+  const col = columns.find(c => c.key === key && c.type === 'id_card');
+  if (col) {
+    if (value && value.length === 18 && !validateIdCard(value)) {
+      showToast('身份证格式校验失败：' + value, 'error');
+    }
+  }
+}
+
+function addRow() {
+  const newRow = { _id: -nextTempId };
+  columns.forEach(c => newRow[c.key] = '');
+  nextTempId++;
+  displayRows.push(newRow);
+  allRows.push(newRow);
+  renderTable(displayRows);
+  setTimeout(() => {
+    const container = document.querySelector('.table-container');
+    if (container) container.scrollTop = container.scrollHeight;
+  }, 50);
+}
+
+function deleteRow(idx) {
+  if (!confirm('确定删除该行吗？删除后可从回收站恢复。')) return;
+  const row = displayRows[idx];
+  if (row._id > 0) {
+    // 已保存的记录，调用后端删除（移入回收站）
+    fetch(`/api/records/delete/${row._id}`, { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          showToast('已删除，可从回收站恢复', 'success');
+          allRows = allRows.filter(r => r._id !== row._id);
+          displayRows.splice(idx, 1);
+          renderTable(displayRows);
+        }
+      });
+  } else {
+    // 未保存的新行，直接移除
+    allRows = allRows.filter(r => r._id !== row._id);
+    displayRows.splice(idx, 1);
+    renderTable(displayRows);
+  }
+}
+
+function toggleSelectAll() {
+  const checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.row-checkbox').forEach(cb => {
+    cb.checked = checked;
+    const id = parseInt(cb.dataset.id);
+    if (checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+  });
+}
+
+function onRowSelect(checkbox) {
+  const id = parseInt(checkbox.dataset.id);
+  if (checkbox.checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+}
+
+function batchDelete() {
+  const ids = Array.from(selectedIds).filter(id => id > 0);
+  if (ids.length === 0) { showToast('请先勾选要删除的行', 'error'); return; }
+  if (!confirm(`确定批量删除 ${ids.length} 条记录吗？删除后可从回收站恢复。`)) return;
+  fetch(BATCH_DELETE_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids })
+  }).then(r => r.json()).then(data => {
+    if (data.success) {
+      showToast(`已删除 ${data.deleted_count} 条记录，可从回收站恢复`, 'success');
+      selectedIds.clear();
+      document.getElementById('selectAll').checked = false;
+      loadData();
+    }
+  });
+}
+
+function renderTable(dataRows) {
+  const tbody = document.getElementById('tableBody');
+  const emptyTip = document.getElementById('emptyTip');
+  if (dataRows.length === 0) {
+    tbody.innerHTML = '';
+    emptyTip.classList.remove('hidden');
+    return;
+  }
+  emptyTip.classList.add('hidden');
+  tbody.innerHTML = dataRows.map((row, idx) => {
+    const isNew = row._id < 0;
+    const cells = columns.map(col => {
+      const val = row[col.key] || '';
+      const isAuto = col.type === 'auto';
+      const isIdCard = col.type === 'id_card';
+      const isSelect = col.type === 'select';
+      const isError = isIdCard && val && !validateIdCard(val) && val.length === 18;
+      let inputHtml = '';
+      if (isSelect) {
+        const opts = (col.options || []).map(o => `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`).join('');
+        inputHtml = `<select data-row="${idx}" data-key="${col.key}" class="select-cell" onchange="onCellChange(${idx}, '${col.key}', this.value)"><option value="">请选择</option>${opts}</select>`;
+      } else {
+        inputHtml = `<input type="${col.type === 'number' ? 'number' : (col.type === 'date' ? 'date' : 'text')}" data-row="${idx}" data-key="${col.key}" value="${val}" class="input-cell ${isAuto ? 'auto' : ''} ${isError ? 'error' : ''}" ${isAuto ? 'readonly' : ''} placeholder="${isIdCard ? '18位身份证号' : ''}" oninput="onCellChange(${idx}, '${col.key}', this.value)" onblur="onCellBlur(${idx}, '${col.key}', this.value)">`;
+      }
+      return `<td class="px-3 py-2 min-w-[140px]">${inputHtml}</td>`;
+    }).join('');
+    return `<tr class="border-b border-gray-50 ${isNew ? 'bg-yellow-50' : ''}">
+      <td class="px-2 py-2 text-center"><input type="checkbox" class="row-checkbox" data-id="${row._id}" onclick="onRowSelect(this)"></td>
+      <td class="px-3 py-2 text-center text-gray-400 text-xs">${idx + 1}</td>
+      ${cells}
+      <td class="px-3 py-2 text-center">
+        <button onclick="deleteRow(${idx})" class="btn btn-danger text-xs px-2 py-1">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(RECORDS_URL);
+    const data = await res.json();
+    allRows = data.records || [];
+    allRows.forEach((r, idx) => r._idx = idx + 1);
+    displayRows = [...allRows];
+    selectedIds.clear();
+    document.getElementById('selectAll').checked = false;
+    renderTable(displayRows);
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+async function saveData() {
+  for (let i = 0; i < displayRows.length; i++) {
+    for (let c of columns) {
+      if (c.type === 'id_card') {
+        const val = displayRows[i][c.key] || '';
+        if (val && !validateIdCard(val)) {
+          showToast(`第${i+1}行 身份证校验失败: ${val}`, 'error');
+          return;
+        }
+      }
+    }
+  }
+  try {
+    const payload = targetType === 'section' 
+      ? { section_id: sectionId, template_id: templateId, rows: displayRows }
+      : { subsection_id: targetId, rows: displayRows };
+    const res = await fetch(SAVE_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); }
+    else { showToast('保存成功！共保存 ' + data.saved + ' 条记录', 'success'); loadData(); }
+  } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
+}
+
+function exportExcel() { window.location.href = EXPORT_URL; }
+
+function importExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+      if (jsonData.length < 2) { showToast('Excel文件为空或格式错误', 'error'); return; }
+      const headers = jsonData[0];
+      const colMap = {};
+      headers.forEach((h, idx) => {
+        for (let c of columns) { if (c.label === h) { colMap[c.key] = idx; break; } }
+      });
+      const rows = [];
+      for (let i = 1; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const item = {};
+        for (let c of columns) {
+          const idx = colMap[c.key];
+          if (idx !== undefined && idx < row.length) {
+            item[c.key] = row[idx] !== undefined ? String(row[idx]) : '';
+          } else { item[c.key] = ''; }
+        }
+        // 校验身份证
+        for (let c of columns) {
+          if (c.type === 'id_card') {
+            const val = item[c.key] || '';
+            if (val && !validateIdCard(val)) {
+              showToast(`导入失败：第${i+1}行身份证校验不通过 ${val}`, 'error');
+              input.value = ''; return;
+            }
+          }
+        }
+        // 自动填充
+        for (let c of columns) {
+          if (c.type === 'auto') {
+            if (c.source === 'id_card_gender') item[c.key] = getGender(item.id_card || item['身份证号'] || item['身份证号码'] || '');
+            if (c.source === 'id_card_age') item[c.key] = getAge(item.id_card || item['身份证号'] || item['身份证号码'] || '');
+          }
+        }
+        rows.push(item);
+      }
+      pendingImportData = rows;
+      document.getElementById('importPreviewCount').textContent = rows.length;
+      document.getElementById('importModal').classList.remove('hidden');
+    } catch (err) { showToast('解析Excel失败: ' + err.message, 'error'); }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function cancelImport() { pendingImportData = null; document.getElementById('importModal').classList.add('hidden'); }
+
+function confirmImport() {
+  if (!pendingImportData) return;
+  const mode = document.querySelector('input[name="importMode"]:checked').value;
+  if (mode === 'replace') {
+    // 先清空现有数据，再导入
+    displayRows = [...pendingImportData];
+    allRows = [...pendingImportData];
+    saveData(); // 触发保存
+  }
+  cancelImport();
+}
+
+// 搜索功能
+function debounceSearch() {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(doSearch, 300);
+}
+function doSearch() {
+  const keyword = document.getElementById('searchKeyword').value.trim().toLowerCase();
+  const gender = document.getElementById('searchGender').value;
+  const ageRange = document.getElementById('searchAge').value;
+  
+  displayRows = allRows.filter(row => {
+    let match = true;
+    if (keyword) {
+      const name = (row.name || '').toLowerCase();
+      const idCard = (row.id_card || '').toLowerCase();
+      if (!name.includes(keyword) && !idCard.includes(keyword)) match = false;
+    }
+    if (gender && row.gender !== gender) match = false;
+    if (ageRange) {
+      try {
+        const age = parseInt(row.age);
+        if (isNaN(age)) { match = false; }
+        else if (ageRange === '0-17' && !(age >= 0 && age <= 17)) match = false;
+        else if (ageRange === '18-35' && !(age >= 18 && age <= 35)) match = false;
+        else if (ageRange === '36-59' && !(age >= 36 && age <= 59)) match = false;
+        else if (ageRange === '60+' && !(age >= 60)) match = false;
+      } catch { match = false; }
+    }
+    return match;
+  });
+  renderTable(displayRows);
+}
+function clearSearch() {
+  document.getElementById('searchKeyword').value = '';
+  document.getElementById('searchGender').value = '';
+  document.getElementById('searchAge').value = '';
+  displayRows = [...allRows];
+  renderTable(displayRows);
+}
+
+// 统计与图表
+async function showStats() {
+  const panel = document.getElementById('statsPanel');
+  panel.classList.remove('hidden');
+  try {
+    const res = await fetch(STATS_URL);
+    const data = await res.json();
+    if (data.success) { renderStatsCharts(data); }
+  } catch (e) { showToast('统计加载失败', 'error'); }
+}
+function hideStats() { document.getElementById('statsPanel').classList.add('hidden'); }
+
+function renderStatsCharts(data) {
+  // 性别饼图
+  const genderChart = echarts.init(document.getElementById('genderChart'));
+  genderChart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
+    series: [{
+      type: 'pie', radius: ['40%', '70%'], avoidLabelOverlap: false,
+      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+      label: { show: true, formatter: '{b}\n{c}人' },
+      data: [
+        { value: data.gender['男'], name: '男', itemStyle: { color: '#3b82f6' } },
+        { value: data.gender['女'], name: '女', itemStyle: { color: '#ec4899' } },
+        { value: data.gender['未知'], name: '未知', itemStyle: { color: '#9ca3af' } }
+      ].filter(d => d.value > 0)
+    }]
+  });
+  
+  // 年龄柱状图
+  const ageChart = echarts.init(document.getElementById('ageChart'));
+  ageChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: Object.keys(data.age), axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value' },
+    series: [{
+      data: Object.values(data.age),
+      type: 'bar',
+      barWidth: '60%',
+      itemStyle: { borderRadius: [4, 4, 0, 0] },
+      color: function(params) {
+        const colors = {'0-17岁': '#a855f7', '18-35岁': '#22c55e', '36-59岁': '#f59e0b', '60岁以上': '#ef4444', '未知': '#9ca3af'};
+        return colors[params.name] || '#6b7280';
+      }
+    }]
+  });
+  
+  // 户主关系饼图（如果有数据）
+  const householdChart = echarts.init(document.getElementById('householdChart'));
+  const dist = data.household_dist || {};
+  const householdData = Object.entries(dist).map(([k, v]) => ({ value: v, name: k })).filter(d => d.value > 0).sort((a,b) => b.value - a.value);
+  if (householdData.length > 0) {
+    householdChart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
+      series: [{
+        type: 'pie', radius: '70%',
+        itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 1 },
+        label: { show: true, fontSize: 10, formatter: '{b}\n{c}人' },
+        data: householdData
+      }]
+    });
+  } else {
+    householdChart.setOption({
+      title: { text: '暂无关系数据', left: 'center', top: 'center', textStyle: { color: '#9ca3af', fontSize: 14 } }
+    });
+  }
+}
+
+// 回收站
+async function showRecycleBin() {
+  document.getElementById('recycleModal').classList.remove('hidden');
+  await loadRecycleBin();
+}
+function hideRecycleBin() { document.getElementById('recycleModal').classList.add('hidden'); }
+
+async function loadRecycleBin() {
+  try {
+    const res = await fetch(RECYCLE_URL);
+    const data = await res.json();
+    const tbody = document.getElementById('recycleBody');
+    const countEl = document.getElementById('recycleCount');
+    if (!data.success || data.records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">回收站为空</td></tr>';
+      countEl.textContent = '共 0 条';
+      return;
+    }
+    countEl.textContent = `共 ${data.records.length} 条`;
+    tbody.innerHTML = data.records.map(r => {
+      const dataPreview = Object.entries(r.data).map(([k,v]) => `${k}:${v}`).slice(0,3).join(', ');
+      return `<tr class="border-b border-gray-50">
+        <td class="px-2 py-2 text-xs text-gray-600 truncate max-w-[200px]" title="${dataPreview}">${dataPreview}...</td>
+        <td class="px-2 py-2 text-xs">${r.deleted_by}</td>
+        <td class="px-2 py-2 text-xs">${r.deleted_at}</td>
+        <td class="px-2 py-2">
+          <button onclick="restoreRecord(${r.id})" class="text-green-600 hover:underline text-xs">↩️ 恢复</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (e) { showToast('回收站加载失败', 'error'); }
+}
+
+async function restoreRecord(id) {
+  if (!confirm('确定恢复这条记录吗？')) return;
+  const res = await fetch(`/api/recycle/restore/${id}`, { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    showToast('恢复成功', 'success');
+    loadRecycleBin();
+    loadData();
+  } else { showToast(data.error || '恢复失败', 'error'); }
+}
+
+async function clearRecycleBin() {
+  if (!confirm('⚠️ 确定清空回收站吗？清空后数据将无法恢复！')) return;
+  const payload = { target_type: targetType, target_id: targetType === 'section' ? sectionId : targetId };
+  const res = await fetch('/api/recycle/clear', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast(`已清空 ${data.cleared_count} 条记录`, 'success');
+    loadRecycleBin();
+  }
+}
+
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.innerHTML = msg.replace(/\n/g, '<br>');
+  toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-sm text-white transition max-w-[90vw]';
+  if (type === 'error') toast.classList.add('bg-red-500');
+  else if (type === 'success') toast.classList.add('bg-green-600');
+  else toast.classList.add('bg-gray-700');
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 3000);
+}
+
+// 初始化
+loadData();
+</script>
+</body>
+</html>

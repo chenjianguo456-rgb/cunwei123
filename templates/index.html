@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>村委资料共享系统 - 首页</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif; }
+  .card:active { transform: scale(0.98); }
+  .nav-blur { backdrop-filter: blur(12px); background: rgba(255,255,255,0.92); }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-24">
+  <!-- 顶部导航 -->
+  <div class="nav-blur sticky top-0 z-50 border-b border-gray-100">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <span class="text-2xl">🏘️</span>
+        <div>
+          <h1 class="text-lg font-bold text-gray-800 leading-tight">村委资料共享系统</h1>
+          <p class="text-xs text-gray-400">数字化乡村管理平台</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        {% if session.is_admin %}
+        <a href="/admin" class="hidden sm:flex items-center space-x-1 text-sm text-green-700 bg-green-50 px-3 py-1.5 rounded-lg hover:bg-green-100 transition">
+          <span>⚙️</span><span>管理后台</span>
+        </a>
+        {% endif %}
+        <a href="/logout" class="text-sm text-gray-500 hover:text-red-500 transition">退出</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 欢迎横幅 -->
+  <div class="max-w-6xl mx-auto px-4 mt-6">
+    <div class="relative rounded-2xl overflow-hidden shadow-lg" style="min-height: 140px;">
+      {% if home_banner %}
+      <img src="/static/uploads/{{ home_banner }}" alt="banner" class="absolute inset-0 w-full h-full object-cover" style="z-index: 0;">
+      <div class="absolute inset-0 bg-black/40" style="z-index: 1;"></div>
+      {% else %}
+      <div class="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600" style="z-index: 1;"></div>
+      {% endif %}
+      <div class="relative z-10 p-6 text-white">
+        <h2 class="text-xl font-bold mb-1">欢迎回来，{{ user }} 👋</h2>
+        <p class="text-green-100 text-sm opacity-90">请选择下方的功能分区，开始数据录入与管理工作</p>
+      </div>
+      {% if not home_banner %}
+      <div class="absolute right-0 bottom-0 opacity-10 text-8xl leading-none select-none z-10">🌾</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- 功能分区卡片 -->
+  <div class="max-w-6xl mx-auto px-4 mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for section in sections %}
+    <a href="/section/{{ section.id }}" class="card rounded-2xl p-5 shadow-sm border hover:shadow-md transition flex items-center space-x-4"
+       style="background-color: {{ section.bg_color if section.bg_color else '#ffffff' }}; border-color: {{ section.accent_color if section.accent_color else '#f3f4f6' }};">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
+           style="background-color: {{ section.accent_color if section.accent_color else '#f0fdf4' }};">
+        {% if section.icon_image %}
+        <img src="/static/uploads/{{ section.icon_image }}" alt="icon" class="w-full h-full object-cover">
+        {% else %}
+        <span class="text-3xl">{{ section.icon }}</span>
+        {% endif %}
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-bold text-lg truncate" style="color: {{ section.text_color if section.text_color else '#1f2937' }};">{{ section.name }}</h3>
+        <p class="text-xs mt-0.5" style="color: {{ section.accent_color if section.accent_color else '#9ca3af' }};">
+          {{ section.description if section.description else '点击进入数据管理' }}
+        </p>
+      </div>
+      <div class="text-xl" style="color: {{ section.accent_color if section.accent_color else '#d1d5db' }};">›</div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <!-- 管理入口（移动端可见） -->
+  {% if session.is_admin %}
+  <div class="max-w-6xl mx-auto px-4 mt-6 sm:hidden">
+    <a href="/admin" class="block w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center text-green-700 font-medium">
+      ⚙️ 进入管理后台
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- 底部信息 -->
+  <div class="max-w-6xl mx-auto px-4 mt-10 mb-8 text-center text-xs text-gray-400">
+    <p>村委资料共享系统 v1.0 · 支持手机端操作</p>
+  </div>
+</body>
+</html>

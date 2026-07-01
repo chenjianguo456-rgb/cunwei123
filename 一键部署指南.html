@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>村委系统部署指南 - Render.com</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f0f5f0;color:#333;line-height:1.8}
+.container{max-width:700px;margin:30px auto;padding:0 20px}
+.header{background:linear-gradient(135deg,#2e7d32,#43a047);color:white;padding:40px 30px;border-radius:16px;text-align:center;margin-bottom:25px;box-shadow:0 4px 20px rgba(46,125,50,0.3)}
+.header h1{font-size:28px;margin-bottom:8px}
+.header p{font-size:15px;opacity:.9}
+.card{background:white;border-radius:12px;padding:25px;margin-bottom:20px;box-shadow:0 2px 12px rgba(0,0,0,0.06)}
+.card h2{color:#2e7d32;font-size:19px;margin-bottom:15px;display:flex;align-items:center;gap:10px}
+.step-num{background:#2e7d32;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;flex-shrink:0}
+.code-block{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;font-family:Consolas,monospace;font-size:13px;margin:12px 0;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.btn{display:inline-block;background:#43a047;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:bold;margin:5px 0;transition:all .2s}
+.btn:hover{background:#2e7d32;transform:translateY(-1px)}
+.highlight{background:#e8f5e9;padding:3px 8px;border-radius:4px;color:#2e7d32;font-weight:bold}
+.warning{background:#fff3cd;border-left:4px solid #ffc107;padding:12px;border-radius:4px;margin:10px 0}
+ul{margin:10px 0;padding-left:20px}
+li{margin:5px 0}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+<h1>🌾 村委资料共享管理系统</h1>
+<p>云端部署 · 24小时在线 · 完全免费</p>
+</div>
+
+<!-- 第一步 -->
+<div class="card">
+<h2><span class="step-num">1</span>注册 Render 账号（2分钟）</h2>
+<p>打开浏览器，访问：</p>
+<a class="btn" href="https://render.com" target="_blank">打开 Render.com 注册</a>
+<p style="margin-top:10px">点击右上角 <span class="highlight">Get Started</span> → 选择 <span class="highlight">Sign up with GitHub</span> 或用邮箱注册</p>
+<div class="warning">
+💡 <b>提示：</b>不需要绑定信用卡，免费版完全够用！
+</div>
+</div>
+
+<!-- 第二步 -->
+<div class="card">
+<h2><span class="step-num">2</span>上传代码到 GitHub（1分钟）</h2>
+<p>在浏览器中操作：</p>
+<ol>
+<li>访问 <a href="https://github.com/new">github.com/new</a> 创建仓库，取名 <span class="highlight">cunwei</span></li>
+<li>保持 Public（公开），点击 Create repository</li>
+<li>在创建后的页面，点击 <span class="highlight">uploading an existing file</span></li>
+<li>将 <b>整个 cunwei_app 文件夹拖入浏览器窗口</b></li>
+<li>点击 <span class="highlight">Commit changes</span> 提交</li>
+</ol>
+</div>
+
+<!-- 第三步 -->
+<div class="card">
+<h2><span class="step-num">3</span> 一键部署（1分钟）</h2>
+<p>回到 Render.com，按以下步骤操作：</p>
+<ol>
+<li>点击顶部 <span class="highlight">New +</span> → 选择 <span class="highlight">Web Service</span></li>
+<li>授权 GitHub → 选择 <span class="highlight">cunwei</span> 仓库</li>
+<li><b>关键设置：</b>
+<ul>
+<li>Name: <span class="highlight">cunwei</span></li>
+<li>Runtime: <span class="highlight">Python 3</span></li>
+<li>Build Command: <span class="highlight">pip install -r requirements.txt</span></li>
+<li>Start Command: <span class="highlight">python app.py</span></li>
+</ul>
+</li>
+<li>往下拉，选择 <span class="highlight">Free</span> 方案</li>
+<li>点击 <span class="highlight">Create Web Service</span></li>
+</ol>
+<p style="margin-top:10px;">⏳ 等待3-5分钟，部署完成后你会看到一个公网地址：</p>
+<div class="code-block">https://cunwei.onrender.com</div>
+</div>
+
+<!-- 完成 -->
+<div class="card" style="text-align:center;background:linear-gradient(135deg,#e8f5e9,#c8e6c9)">
+<h2 style="color:#2e7d32">🎉 完成！</h2>
+<p>你的系统将 <b>24小时在线</b>，关机也能用！</p>
+<p>默认管理员账号：<span class="highlight">admin</span> / <span class="highlight">admin123456</span></p>
+</div>
+
+</div>
+</body>
+</html>

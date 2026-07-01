@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>{{ section.name }} - 子功能列表</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif; }
+  .nav-blur { backdrop-filter: blur(12px); background: rgba(255,255,255,0.92); }
+  .card:active { transform: scale(0.98); }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-24">
+  <!-- 导航 -->
+  <div class="nav-blur sticky top-0 z-50 border-b border-gray-100">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2 overflow-hidden">
+        <a href="/" class="text-gray-400 hover:text-gray-600 text-lg shrink-0">‹</a>
+        <span class="text-xl">{{ section.icon }}</span>
+        <h1 class="text-lg font-bold text-gray-800 truncate">{{ section.name }}</h1>
+      </div>
+    </div>
+  </div>
+
+  <!-- 子功能卡片列表 -->
+  <div class="max-w-6xl mx-auto px-4 mt-6">
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+      <h2 class="text-lg font-bold text-gray-800 mb-1">选择功能模块</h2>
+      <p class="text-sm text-gray-400">点击下方模块进入数据录入管理</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for sub in subsections %}
+      <a href="/subsection/{{ sub.id }}" class="card rounded-2xl p-5 shadow-sm border hover:shadow-md transition flex items-center space-x-4"
+         style="background-color: {{ section.bg_color if section.bg_color else '#ffffff' }}; border-color: {{ section.accent_color if section.accent_color else '#f3f4f6' }};">
+        <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
+             style="background-color: {{ section.accent_color + '20' if section.accent_color else '#f0fdf4' }};">
+          {% if sub.icon_image %}
+          <img src="/static/uploads/{{ sub.icon_image }}" alt="icon" class="w-full h-full object-cover">
+          {% else %}
+          <span class="text-3xl">{{ sub.icon }}</span>
+          {% endif %}
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-bold text-lg truncate" style="color: {{ section.text_color if section.text_color else '#1f2937' }};">{{ sub.name }}</h3>
+          <p class="text-xs mt-0.5" style="color: {{ section.accent_color if section.accent_color else '#9ca3af' }};">
+            {{ sub.description if sub.description else '点击进入数据管理' }}
+          </p>
+        </div>
+        <div class="text-xl" style="color: {{ section.accent_color if section.accent_color else '#d1d5db' }};">›</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 底部 -->
+  <div class="max-w-6xl mx-auto px-4 mt-10 mb-8 text-center text-xs text-gray-400">
+    <p>共 {{ subsections|length }} 个子功能模块</p>
+  </div>
+</body>
+</html>

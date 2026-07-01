@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>管理后台 - 村委资料共享系统</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif; }
+  .nav-blur { backdrop-filter: blur(12px); background: rgba(255,255,255,0.92); }
+  .tab-btn { @apply px-4 py-2 rounded-lg text-sm font-medium transition; }
+  .tab-btn.active { @apply bg-green-600 text-white shadow; }
+  .tab-btn:not(.active) { @apply text-gray-600 hover:bg-gray-100; }
+  .btn { @apply px-4 py-2 rounded-xl text-sm font-medium transition active:scale-95; }
+  .btn-primary { @apply bg-green-600 text-white hover:bg-green-700 shadow; }
+  .btn-secondary { @apply bg-gray-100 text-gray-700 hover:bg-gray-200; }
+  .btn-danger { @apply bg-red-50 text-red-600 hover:bg-red-100; }
+  .panel { @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-4; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-24">
+  <!-- 导航 -->
+  <div class="nav-blur sticky top-0 z-50 border-b border-gray-100">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <a href="/" class="text-gray-400 hover:text-gray-600 text-lg shrink-0">‹</a>
+        <h1 class="text-lg font-bold text-gray-800">⚙️ 管理后台</h1>
+      </div>
+      <a href="/logout" class="text-sm text-gray-500 hover:text-red-500 transition">退出</a>
+    </div>
+  </div>
+
+  <div class="max-w-6xl mx-auto px-4 mt-4">
+    <!-- Tab 切换 -->
+    <div class="flex space-x-2 mb-4 overflow-x-auto pb-1">
+      <button class="tab-btn active" onclick="switchTab('sections')">功能分区</button>
+      <button class="tab-btn" onclick="switchTab('templates')">表格模板</button>
+      <button class="tab-btn" onclick="switchTab('users')">账户管理</button>
+    </div>
+
+    <!-- 功能分区管理 -->
+    <div id="tab-sections" class="tab-panel">
+      <!-- 首页横幅管理 -->
+      <div class="panel mb-4">
+        <h2 class="font-bold text-gray-800 mb-3">🏠 首页横幅图片</h2>
+        <div class="flex flex-col sm:flex-row items-start gap-4">
+          <div class="w-full sm:w-64 h-32 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden relative">
+            {% if home_banner %}
+            <img id="bannerPreview" src="/static/uploads/{{ home_banner }}" alt="首页横幅" class="w-full h-full object-cover" onerror="this.classList.add('hidden'); document.getElementById('bannerPlaceholder').classList.remove('hidden');">
+            <div id="bannerPlaceholder" class="text-gray-400 text-sm text-center hidden">暂无图片<br>使用默认绿色背景</div>
+            {% else %}
+            <img id="bannerPreview" src="" alt="首页横幅" class="w-full h-full object-cover hidden" onload="this.classList.remove('hidden')" onerror="this.classList.add('hidden'); document.getElementById('bannerPlaceholder').classList.remove('hidden');">
+            <div id="bannerPlaceholder" class="text-gray-400 text-sm text-center">暂无图片<br>使用默认绿色背景</div>
+            {% endif %}
+          </div>
+          <div class="flex-1 space-y-2">
+            <div class="flex flex-wrap gap-2 items-center">
+              <label class="btn btn-secondary cursor-pointer inline-flex items-center">
+                📤 上传图片
+                <input type="file" id="bannerInput" accept="image/*" class="hidden" onchange="uploadBanner(this)">
+              </label>
+              <button onclick="deleteBanner()" class="btn btn-danger">🗑️ 删除图片</button>
+            </div>
+            <p class="text-xs text-gray-400">建议尺寸：1200×400 像素，支持 JPG/PNG/GIF/WEBP</p>
+            <p class="text-xs text-gray-400">上传后首页横幅将显示此图片，未上传则使用默认绿色渐变背景</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel mb-4">
+        <h2 class="font-bold text-gray-800 mb-3">新增功能分区</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+          <input type="text" id="newSectionName" placeholder="分区名称，例如：扶贫台账" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <input type="text" id="newSectionIcon" placeholder="图标（可选）例如：📊" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <input type="number" id="newSectionOrder" placeholder="排序" value="0" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <input type="text" id="newSectionDesc" placeholder="描述文字（可选）" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+        </div>
+        <div class="flex flex-wrap gap-3 items-center mb-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600">背景色：</label>
+            <input type="color" id="newSectionBg" value="#ffffff" class="w-10 h-8 rounded border cursor-pointer">
+            <input type="text" id="newSectionBgText" value="#ffffff" class="w-24 px-2 py-1 text-sm border rounded" onchange="document.getElementById('newSectionBg').value=this.value">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600">文字色：</label>
+            <input type="color" id="newSectionText" value="#1f2937" class="w-10 h-8 rounded border cursor-pointer">
+            <input type="text" id="newSectionTextText" value="#1f2937" class="w-24 px-2 py-1 text-sm border rounded" onchange="document.getElementById('newSectionText').value=this.value">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600">强调色：</label>
+            <input type="color" id="newSectionAccent" value="#10b981" class="w-10 h-8 rounded border cursor-pointer">
+            <input type="text" id="newSectionAccentText" value="#10b981" class="w-24 px-2 py-1 text-sm border rounded" onchange="document.getElementById('newSectionAccent').value=this.value">
+          </div>
+          <button onclick="addSection()" class="btn btn-primary">➕ 新增分区</button>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+          <div id="newSectionPreview" class="flex items-center space-x-4 p-4 rounded-xl border bg-white transition" style="border-color: #10b981;">
+            <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shrink-0" id="previewIconBox" style="background-color: #10b98120;">
+              <span id="previewIcon">📊</span>
+            </div>
+            <div class="flex-1">
+              <h3 class="font-bold text-lg" id="previewName" style="color: #1f2937;">扶贫台账</h3>
+              <p class="text-xs" id="previewDesc" style="color: #10b981;">点击进入数据管理</p>
+            </div>
+            <div class="text-xl" id="previewArrow" style="color: #10b981;">›</div>
+          </div>
+          <p class="text-xs text-gray-400 mt-2 text-center">👆 实时预览效果</p>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 class="font-bold text-gray-800 mb-3">现有分区（管理员可修改文字、颜色、图标）</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-gray-500 border-b"><th class="py-2">排序</th><th class="py-2">名称</th><th class="py-2 w-24">图标</th><th class="py-2 w-32">图标图片</th><th class="py-2 w-48">颜色风格</th><th class="py-2 w-32">描述文字</th><th class="py-2">操作</th></tr></thead>
+            <tbody id="sectionList">
+              {% for s in sections %}
+              <tr class="border-b border-gray-50" data-id="{{ s.id }}">
+                <td class="py-2"><input type="number" class="w-16 px-2 py-1 border rounded section-order" value="{{ s.sort_order }}"></td>
+                <td class="py-2"><input type="text" class="w-full px-2 py-1 border rounded section-name" value="{{ s.name }}"></td>
+                <td class="py-2"><input type="text" class="w-16 px-2 py-1 border rounded section-icon" value="{{ s.icon }}"></td>
+                <td class="py-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-10 h-10 rounded bg-gray-100 border overflow-hidden flex items-center justify-center">
+                      {% if s.icon_image %}
+                      <img src="/static/uploads/{{ s.icon_image }}" alt="icon" class="w-full h-full object-cover">
+                      {% else %}
+                      <span class="text-lg">{{ s.icon }}</span>
+                      {% endif %}
+                    </div>
+                    <label class="cursor-pointer text-xs text-green-600 hover:underline">
+                      📤
+                      <input type="file" accept="image/*" class="hidden" onchange="uploadSectionIcon({{ s.id }}, this)">
+                    </label>
+                    {% if s.icon_image %}
+                    <button onclick="deleteSectionIcon({{ s.id }})" class="text-xs text-red-600 hover:underline">删</button>
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="py-2">
+                  <div class="flex gap-1 flex-wrap">
+                    <div class="flex items-center gap-1">
+                      <input type="color" class="w-6 h-6 rounded border cursor-pointer section-bg" value="{{ s.bg_color if s.bg_color else '#ffffff' }}" title="背景色">
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <input type="color" class="w-6 h-6 rounded border cursor-pointer section-text" value="{{ s.text_color if s.text_color else '#1f2937' }}" title="文字色">
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <input type="color" class="w-6 h-6 rounded border cursor-pointer section-accent" value="{{ s.accent_color if s.accent_color else '#10b981' }}" title="强调色">
+                    </div>
+                  </div>
+                </td>
+                <td class="py-2"><input type="text" class="w-full px-2 py-1 border rounded section-desc text-xs" value="{{ s.description }}" placeholder="默认描述"></td>
+                <td class="py-2 space-x-2">
+                  <button onclick="updateSection({{ s.id }})" class="text-green-600 hover:underline font-medium">💾 保存</button>
+                  <button onclick="deleteSection({{ s.id }})" class="text-red-600 hover:underline">删除</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 子功能管理 -->
+      <div class="panel mt-4">
+        <h2 class="font-bold text-gray-800 mb-3">🗂️ 子功能管理（二级功能模块）</h2>
+        <div class="bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4 text-sm text-amber-700">
+          💡 说明：每个主功能分区下可添加多个子功能模块。例如"乡村振兴"下可设"项目台账"、"资金记录"、"产业规划"等。每个子功能有独立的表格模板和数据。
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">所属主分区</label>
+            <select id="subSectionId" class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+              <option value="">选择主分区...</option>
+              {% for s in sections %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">子功能名称</label>
+            <input type="text" id="subName" placeholder="如：项目台账、资金记录" class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">图标 Emoji</label>
+            <input type="text" id="subIcon" placeholder="📄" value="📄" class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">排序</label>
+            <input type="number" id="subOrder" value="0" class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          </div>
+          <div class="lg:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1">描述文字</label>
+            <input type="text" id="subDesc" placeholder="子功能说明（可选）" class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">选择表格需要的列（勾选即可）</label>
+          <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2" id="subPresetCols">
+              <!-- 预设列由JS生成 -->
+            </div>
+            <div class="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-400">
+              💡 选中后系统自动生成对应字段，无需手动填写
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1">自定义列（如上方没有需要的，可手动添加）</label>
+            <div id="subColumns" class="space-y-2"></div>
+            <div class="flex gap-2 mt-2">
+              <button onclick="addSubColumn()" class="btn btn-secondary text-sm">➕ 添加自定义列</button>
+            </div>
+          </div>
+        </div>
+        <button onclick="addSubSection()" class="btn btn-primary">➕ 创建子功能</button>
+      </div>
+
+      <div class="panel mt-4">
+        <h2 class="font-bold text-gray-800 mb-3">现有子功能列表（管理员可修改图标、文字）</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-gray-500 border-b"><th class="py-2">所属分区</th><th class="py-2">名称</th><th class="py-2 w-20">图标</th><th class="py-2 w-28">图标图片</th><th class="py-2">描述</th><th class="py-2 w-16">排序</th><th class="py-2">操作</th></tr></thead>
+            <tbody id="subSectionList"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模板管理 -->
+    <div id="tab-templates" class="tab-panel hidden">
+      <div class="panel mb-4">
+        <h2 class="font-bold text-gray-800 mb-3">新增表格模板</h2>
+        <div class="flex flex-col gap-2">
+          <select id="tplSectionId" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+            <option value="">选择所属分区...</option>
+            {% for s in sections %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+          <input type="text" id="tplName" placeholder="模板名称" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <div id="tplColumns" class="space-y-2">
+            <!-- 动态列 -->
+          </div>
+          <div class="flex gap-2">
+            <button onclick="addTplColumn()" class="btn btn-secondary">➕ 添加列</button>
+            <button onclick="addTplColumnAuto('id_card_gender')" class="btn btn-secondary text-xs">添加性别(自动)</button>
+            <button onclick="addTplColumnAuto('id_card_age')" class="btn btn-secondary text-xs">添加年龄(自动)</button>
+          </div>
+          <button onclick="saveTemplate()" class="btn btn-primary">保存模板</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 class="font-bold text-gray-800 mb-3">现有模板</h2>
+        <div class="space-y-3" id="templateList">
+          {% for t in templates %}
+          <div class="border rounded-xl p-3 bg-gray-50" data-id="{{ t.id }}">
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <div class="font-bold text-gray-800">{{ t.name }}</div>
+                <div class="text-xs text-gray-500">所属分区：{{ t.section.name if t.section else '未知' }}</div>
+              </div>
+              <button onclick="deleteTemplate({{ t.id }})" class="btn btn-danger text-xs px-2 py-1">删除</button>
+            </div>
+            <div class="text-xs text-gray-600 bg-white rounded-lg p-2 border border-gray-100">
+              <span class="font-semibold">列结构：</span>
+              {{ t.columns_list | map(attribute='label') | join('、') }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- 账户管理 -->
+    <div id="tab-users" class="tab-panel hidden">
+      <div class="panel mb-4">
+        <h2 class="font-bold text-gray-800 mb-3">修改管理员密码</h2>
+        <div class="flex flex-col gap-2">
+          <input type="password" id="oldPassword" placeholder="原密码" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <input type="password" id="newPassword" placeholder="新密码（至少6位）" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <button onclick="changePassword()" class="btn btn-primary">修改密码</button>
+        </div>
+      </div>
+      <div class="panel mb-4">
+        <h2 class="font-bold text-gray-800 mb-3">添加普通用户</h2>
+        <div class="flex flex-col gap-2">
+          <input type="text" id="newUsername" placeholder="新用户名" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <input type="password" id="newUserPassword" placeholder="密码" class="px-3 py-2 rounded-lg border border-gray-200 focus:border-green-500 outline-none">
+          <button onclick="addUser()" class="btn btn-primary">添加用户</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 class="font-bold text-gray-800 mb-3">用户列表（{{ users|length }} 人）</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-gray-500 border-b"><th class="py-2">用户名</th><th class="py-2">角色</th><th class="py-2">注册时间</th><th class="py-2">操作</th></tr></thead>
+            <tbody id="userTableBody">
+              {% for u in users %}
+              <tr class="border-b border-gray-50" data-user-id="{{ u.id }}">
+                <td class="py-2 font-medium">{{ u.username }}</td>
+                <td class="py-2">
+                  {% if u.is_admin %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">管理员</span>
+                  {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">普通用户</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 text-gray-400 text-xs">{{ u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '-' }}</td>
+                <td class="py-2">
+                  {% if u.username == 'admin' %}
+                    <span class="text-gray-400">不可注销</span>
+                  {% else %}
+                    <button onclick="deleteUser({{ u.id }}, '{{ u.username }}')" class="btn btn-danger text-xs px-2 py-1">🚫 注销账户</button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3 text-xs text-gray-400">
+          <p>💡 提示：管理员可注销普通用户，注销后该账户将失效；管理员账户不可注销。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提示条 -->
+  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-sm text-white hidden transition"></div>
+
+<script>
+let tplColCount = 0;
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-sm text-white transition';
+  if (type === 'error') toast.classList.add('bg-red-500');
+  else if (type === 'success') toast.classList.add('bg-green-600');
+  else toast.classList.add('bg-gray-700');
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 3000);
+}
+
+// 分区管理：实时预览
+function updatePreview() {
+  const name = document.getElementById('newSectionName').value.trim() || '扶贫台账';
+  const icon = document.getElementById('newSectionIcon').value.trim() || '📊';
+  const desc = document.getElementById('newSectionDesc').value.trim() || '点击进入数据管理';
+  const bg = document.getElementById('newSectionBg').value;
+  const text = document.getElementById('newSectionText').value;
+  const accent = document.getElementById('newSectionAccent').value;
+  
+  document.getElementById('previewName').textContent = name;
+  document.getElementById('previewName').style.color = text;
+  document.getElementById('previewIcon').textContent = icon;
+  document.getElementById('previewDesc').textContent = desc;
+  document.getElementById('previewDesc').style.color = accent;
+  document.getElementById('previewArrow').style.color = accent;
+  document.getElementById('previewIconBox').style.backgroundColor = accent + '20';
+  document.getElementById('newSectionPreview').style.backgroundColor = bg;
+  document.getElementById('newSectionPreview').style.borderColor = accent;
+  
+  document.getElementById('newSectionBgText').value = bg;
+  document.getElementById('newSectionTextText').value = text;
+  document.getElementById('newSectionAccentText').value = accent;
+}
+
+// 绑定预览事件
+document.addEventListener('DOMContentLoaded', function() {
+  ['newSectionName','newSectionIcon','newSectionDesc','newSectionBg','newSectionText','newSectionAccent'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updatePreview);
+  });
+  updatePreview();
+});
+
+async function addSection() {
+  const name = document.getElementById('newSectionName').value.trim();
+  const icon = document.getElementById('newSectionIcon').value.trim() || '📁';
+  const order = parseInt(document.getElementById('newSectionOrder').value) || 0;
+  const desc = document.getElementById('newSectionDesc').value.trim();
+  const bg = document.getElementById('newSectionBg').value;
+  const text = document.getElementById('newSectionText').value;
+  const accent = document.getElementById('newSectionAccent').value;
+  if (!name) return showToast('请输入分区名称', 'error');
+  const res = await fetch('/api/admin/sections', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, icon, sort_order: order, description: desc, bg_color: bg, text_color: text, accent_color: accent })
+  });
+  const data = await res.json();
+  if (data.success) { showToast('新增成功', 'success'); location.reload(); }
+  else showToast(data.error || '失败', 'error');
+}
+async function updateSection(id) {
+  const row = document.querySelector(`tr[data-id="${id}"]`);
+  const name = row.querySelector('.section-name').value.trim();
+  const icon = row.querySelector('.section-icon').value.trim();
+  const sort_order = parseInt(row.querySelector('.section-order').value) || 0;
+  const desc = row.querySelector('.section-desc').value.trim();
+  const bg = row.querySelector('.section-bg').value;
+  const text = row.querySelector('.section-text').value;
+  const accent = row.querySelector('.section-accent').value;
+  const res = await fetch(`/api/admin/sections/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, icon, sort_order, description: desc, bg_color: bg, text_color: text, accent_color: accent })
+  });
+  const data = await res.json();
+  if (data.success) showToast('保存成功', 'success');
+  else showToast(data.error || '失败', 'error');
+}
+async function deleteSection(id) {
+  if (!confirm('确定删除该分区？该分区下所有数据和模板将被清空！')) return;
+  const res = await fetch(`/api/admin/sections/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.success) { showToast('删除成功', 'success'); location.reload(); }
+  else showToast(data.error || '失败', 'error');
+}
+
+// 模板管理
+function addTplColumn() {
+  tplColCount++;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-center';
+  div.innerHTML = `
+    <input type="text" placeholder="列名" class="tpl-col-label flex-1 px-2 py-1 rounded border text-sm" data-idx="${tplColCount}">
+    <input type="text" placeholder="字段key" class="tpl-col-key w-24 px-2 py-1 rounded border text-sm" data-idx="${tplColCount}">
+    <select class="tpl-col-type w-28 px-2 py-1 rounded border text-sm" data-idx="${tplColCount}">
+      <option value="text">文本</option>
+      <option value="number">数字</option>
+      <option value="date">日期</option>
+      <option value="id_card">身份证号</option>
+      <option value="select">下拉选择</option>
+      <option value="auto">自动计算</option>
+    </select>
+    <input type="text" placeholder="选项(用|分隔)" class="tpl-col-opt w-24 px-2 py-1 rounded border text-sm" data-idx="${tplColCount}" title="下拉选择时填写">
+    <button onclick="this.parentElement.remove()" class="text-red-500 text-sm">✕</button>
+  `;
+  document.getElementById('tplColumns').appendChild(div);
+}
+function addTplColumnAuto(source) {
+  tplColCount++;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-center';
+  const label = source === 'id_card_gender' ? '性别' : '年龄';
+  const key = source === 'id_card_gender' ? 'gender' : 'age';
+  div.innerHTML = `
+    <input type="text" value="${label}" class="tpl-col-label flex-1 px-2 py-1 rounded border text-sm bg-gray-50" readonly data-idx="${tplColCount}">
+    <input type="text" value="${key}" class="tpl-col-key w-24 px-2 py-1 rounded border text-sm bg-gray-50" readonly data-idx="${tplColCount}">
+    <select class="tpl-col-type w-28 px-2 py-1 rounded border text-sm hidden" data-idx="${tplColCount}"><option value="auto">自动计算</option></select>
+    <input type="text" value="${source}" class="tpl-col-source w-24 px-2 py-1 rounded border text-sm bg-gray-50" readonly data-idx="${tplColCount}">
+    <button onclick="this.parentElement.remove()" class="text-red-500 text-sm">✕</button>
+  `;
+  document.getElementById('tplColumns').appendChild(div);
+}
+async function saveTemplate() {
+  const sectionId = document.getElementById('tplSectionId').value;
+  const name = document.getElementById('tplName').value.trim();
+  if (!sectionId || !name) return showToast('请选择分区并输入模板名称', 'error');
+  const cols = [];
+  const rows = document.getElementById('tplColumns').querySelectorAll('div');
+  rows.forEach(row => {
+    const label = row.querySelector('.tpl-col-label').value.trim();
+    const key = row.querySelector('.tpl-col-key').value.trim();
+    const type = row.querySelector('.tpl-col-type').value;
+    const opt = row.querySelector('.tpl-col-opt')?.value || '';
+    const source = row.querySelector('.tpl-col-source')?.value || '';
+    if (!label || !key) return;
+    const col = { key, label, type };
+    if (type === 'select' && opt) col.options = opt.split('|').map(s => s.trim());
+    if (type === 'auto' && source) col.source = source;
+    cols.push(col);
+  });
+  if (cols.length === 0) return showToast('请至少添加一列', 'error');
+  const res = await fetch('/api/admin/templates', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section_id: parseInt(sectionId), name, columns: cols })
+  });
+  const data = await res.json();
+  if (data.success) { showToast('模板创建成功', 'success'); location.reload(); }
+  else showToast(data.error || '失败', 'error');
+}
+async function deleteTemplate(id) {
+  if (!confirm('确定删除该模板？模板关联数据将被清空！')) return;
+  const res = await fetch(`/api/admin/templates/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.success) { showToast('删除成功', 'success'); location.reload(); }
+  else showToast(data.error || '失败', 'error');
+}
+
+// 用户管理
+async function changePassword() {
+  const oldPassword = document.getElementById('oldPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  if (!newPassword || newPassword.length < 6) return showToast('新密码至少6位', 'error');
+  const res = await fetch('/api/admin/users/password', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+  });
+  const data = await res.json();
+  if (data.success) { showToast('密码修改成功', 'success'); document.getElementById('oldPassword').value = ''; document.getElementById('newPassword').value = ''; }
+  else showToast(data.error || '失败', 'error');
+}
+async function addUser() {
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newUserPassword').value;
+  if (!username || !password) return showToast('用户名和密码不能为空', 'error');
+  const res = await fetch('/api/admin/users', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  const data = await res.json();
+  if (data.success) { showToast('用户添加成功', 'success'); location.reload(); }
+  else showToast(data.error || '失败', 'error');
+}
+async function deleteUser(id, username) {
+  if (!confirm(`确定注销用户 "${username}" 吗？\n注销后该账户将无法登录，且不可恢复。`)) return;
+  const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.success) {
+    showToast(`用户 "${username}" 已注销`, 'success');
+    // 移除表格行，避免整页刷新
+    const row = document.querySelector(`tr[data-user-id="${id}"]`);
+    if (row) row.remove();
+  } else {
+    showToast(data.error || '注销失败', 'error');
+  }
+}
+
+// 图片上传/删除
+async function uploadBanner(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/upload/banner', { method: 'POST', body: form });
+  const data = await res.json();
+  if (data.success) {
+    showToast('首页横幅上传成功', 'success');
+    document.getElementById('bannerPreview').src = data.url + '?t=' + Date.now();
+    document.getElementById('bannerPreview').classList.remove('hidden');
+    document.getElementById('bannerPlaceholder').classList.add('hidden');
+  } else {
+    showToast(data.error || '上传失败', 'error');
+  }
+  input.value = '';
+}
+async function deleteBanner() {
+  if (!confirm('确定删除首页横幅图片？删除后将恢复默认绿色背景。')) return;
+  const res = await fetch('/api/upload/delete_banner', { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    showToast('已删除', 'success');
+    document.getElementById('bannerPreview').classList.add('hidden');
+    document.getElementById('bannerPreview').src = '';
+    document.getElementById('bannerPlaceholder').classList.remove('hidden');
+  }
+}
+async function uploadSectionIcon(sectionId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/upload/section_icon/' + sectionId, { method: 'POST', body: form });
+  const data = await res.json();
+  if (data.success) {
+    showToast('图标上传成功', 'success');
+    location.reload();
+  } else {
+    showToast(data.error || '上传失败', 'error');
+  }
+  input.value = '';
+}
+async function deleteSectionIcon(sectionId) {
+  if (!confirm('确定删除该分区图标图片？')) return;
+  const res = await fetch('/api/upload/delete_section_icon/' + sectionId, { method: 'POST' });
+  const data = await res.json();
+  if (data.success) { showToast('已删除', 'success'); location.reload(); }
+}
+
+// 预设常用列定义
+const PRESET_COLUMNS = [
+  { key: 'group', label: '小组', type: 'text', icon: '👥' },
+  { key: 'householder_rel', label: '与户主关系', type: 'select', options: ['户主', '三女', '三子', '二女', '五子', '儿媳', '养女或继女', '四子', '外孙女', '外孙子', '外甥', '外甥女', '夫', '女', '女婿', '妹妹', '妻', '姐姐', '子', '孙女', '孙媳妇或外孙媳妇', '孙子', '岳母', '曾孙女或曾外孙女', '次子', '母亲', '父亲', '配偶', '长女', '长子', '非亲属'], icon: '👨‍👩‍👧' },
+  { key: 'name', label: '姓名', type: 'text', icon: '👤' },
+  { key: 'id_card', label: '身份证号码', type: 'id_card', icon: '🆔' },
+  { key: 'gender', label: '性别', type: 'auto', source: 'id_card_gender', icon: '⚧️', autoFrom: 'id_card' },
+  { key: 'age', label: '年龄', type: 'auto', source: 'id_card_age', icon: '🔢', autoFrom: 'id_card' },
+  { key: 'phone', label: '联系电话', type: 'text', icon: '📱' },
+  { key: 'area', label: '面积', type: 'number', icon: '📐' },
+  { key: 'social_card', label: '社保卡号', type: 'text', icon: '💳' },
+  { key: 'disability_card', label: '残疾证号码', type: 'text', icon: '♿' },
+  { key: 'disability_level', label: '残疾等级', type: 'select', options: ['一级', '二级', '三级', '四级'], icon: '⭐' },
+  { key: 'work_location', label: '务工地点', type: 'text', icon: '🏗️' },
+  { key: 'unit', label: '单位', type: 'text', icon: '🏢' },
+  { key: 'address', label: '地址', type: 'text', icon: '🏠' },
+  { key: 'remark', label: '备注', type: 'text', icon: '📝' },
+];
+
+// 记录用户勾选预设列的顺序
+let presetColOrder = [];
+
+// 生成预设列选择器
+function initPresetColumns() {
+  const container = document.getElementById('subPresetCols');
+  if (!container) return;
+  presetColOrder = [];
+  container.innerHTML = PRESET_COLUMNS.map((col, idx) => `
+    <label class="flex items-center space-x-2 cursor-pointer hover:bg-white p-2 rounded transition" title="${col.label} (${col.type === 'auto' ? '自动从身份证号计算' : '文本' + (col.type === 'id_card' ? '/校验' : '')})">
+      <input type="checkbox" value="${idx}" class="preset-col-checkbox w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500" onchange="onPresetColChange(this, ${idx})">
+      <span class="text-sm">${col.icon} ${col.label}</span>
+    </label>
+  `).join('');
+}
+
+function onPresetColChange(checkbox, idx) {
+  if (checkbox.checked) {
+    // 勾选：加入顺序列表（去重）
+    if (!presetColOrder.includes(idx)) {
+      presetColOrder.push(idx);
+    }
+  } else {
+    // 取消勾选：从顺序列表移除
+    presetColOrder = presetColOrder.filter(i => i !== idx);
+  }
+}
+
+// 获取选中的预设列（按用户勾选顺序，自动处理依赖关系）
+function getSelectedPresetColumns() {
+  // 按用户勾选顺序获取选中的列
+  let selected = presetColOrder.map(i => PRESET_COLUMNS[i]).filter(c => {
+    const cb = document.querySelector(`.preset-col-checkbox[value="${PRESET_COLUMNS.indexOf(c)}"]`);
+    return cb && cb.checked;
+  });
+  
+  // 补充可能漏掉的（用户勾选了但未在order中的，按固定顺序追加）
+  const checked = document.querySelectorAll('.preset-col-checkbox:checked');
+  Array.from(checked).forEach(cb => {
+    const idx = parseInt(cb.value);
+    if (!presetColOrder.includes(idx)) {
+      selected.push(PRESET_COLUMNS[idx]);
+    }
+  });
+  
+  // 去重（按首次出现顺序）
+  const seen = new Set();
+  selected = selected.filter(c => {
+    if (seen.has(c.key)) return false;
+    seen.add(c.key);
+    return true;
+  });
+  
+  // 自动添加依赖列：如果选了性别/年龄，但没有选身份证号，自动加到最前面
+  const hasIdCard = selected.some(c => c.key === 'id_card');
+  const needsIdCard = selected.some(c => c.autoFrom === 'id_card');
+  if (needsIdCard && !hasIdCard) {
+    const idCardCol = PRESET_COLUMNS.find(c => c.key === 'id_card');
+    selected.unshift(idCardCol);
+  }
+  return selected;
+}
+
+// 初始化两个默认列
+addTplColumn();
+addTplColumn();
+initPresetColumns();
+
+// 子功能管理：动态列
+let subColCount = 0;
+function addSubColumn() {
+  subColCount++;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-center';
+  div.innerHTML = `
+    <input type="text" placeholder="列名" class="sub-col-label flex-1 px-2 py-1 rounded border text-sm" data-idx="${subColCount}">
+    <input type="text" placeholder="字段key" class="sub-col-key w-24 px-2 py-1 rounded border text-sm" data-idx="${subColCount}">
+    <select class="sub-col-type w-28 px-2 py-1 rounded border text-sm" data-idx="${subColCount}">
+      <option value="text">文本</option>
+      <option value="number">数字</option>
+      <option value="date">日期</option>
+      <option value="id_card">身份证号</option>
+      <option value="select">下拉选择</option>
+      <option value="auto">自动计算</option>
+    </select>
+    <input type="text" placeholder="选项(用|分隔)" class="sub-col-opt w-24 px-2 py-1 rounded border text-sm" data-idx="${subColCount}" title="下拉选择时填写">
+    <button onclick="this.parentElement.remove()" class="text-red-500 text-sm">✕</button>
+  `;
+  document.getElementById('subColumns').appendChild(div);
+}
+function addSubColumnAuto(source) {
+  subColCount++;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-center';
+  const label = source === 'id_card_gender' ? '性别' : '年龄';
+  const key = source === 'id_card_gender' ? 'gender' : 'age';
+  div.innerHTML = `
+    <input type="text" value="${label}" class="sub-col-label flex-1 px-2 py-1 rounded border text-sm bg-gray-50" readonly data-idx="${subColCount}">
+    <input type="text" value="${key}" class="sub-col-key w-24 px-2 py-1 rounded border text-sm bg-gray-50" readonly data-idx="${subColCount}">
+    <select class="sub-col-type w-28 px-2 py-1 rounded border text-sm hidden" data-idx="${subColCount}"><option value="auto">自动计算</option></select>
+    <input type="text" value="${source}" class="sub-col-source w-24 px-2 py-1 rounded border text-sm bg-gray-50" readonly data-idx="${subColCount}">
+    <button onclick="this.parentElement.remove()" class="text-red-500 text-sm">✕</button>
+  `;
+  document.getElementById('subColumns').appendChild(div);
+}
+async function addSubSection() {
+  const sectionId = document.getElementById('subSectionId').value;
+  const name = document.getElementById('subName').value.trim();
+  const icon = document.getElementById('subIcon').value.trim() || '📄';
+  const order = parseInt(document.getElementById('subOrder').value) || 0;
+  const desc = document.getElementById('subDesc').value.trim();
+  if (!sectionId) return showToast('请选择所属主分区', 'error');
+  if (!name) return showToast('请输入子功能名称', 'error');
+  
+  // 收集预设列（勾选的部分）
+  const presetCols = getSelectedPresetColumns().map(c => {
+    const col = { key: c.key, label: c.label, type: c.type };
+    if (c.source) col.source = c.source;
+    if (c.options) col.options = c.options;  // 关键：复制下拉选项！
+    return col;
+  });
+  
+  // 收集自定义列
+  const customCols = [];
+  const rows = document.getElementById('subColumns').querySelectorAll('div');
+  rows.forEach(row => {
+    const label = row.querySelector('.sub-col-label')?.value.trim();
+    const key = row.querySelector('.sub-col-key')?.value.trim();
+    const type = row.querySelector('.sub-col-type')?.value;
+    const opt = row.querySelector('.sub-col-opt')?.value || '';
+    const source = row.querySelector('.sub-col-source')?.value || '';
+    if (!label || !key) return;
+    const col = { key, label, type };
+    if (type === 'select' && opt) col.options = opt.split('|').map(s => s.trim());
+    if (type === 'auto' && source) col.source = source;
+    customCols.push(col);
+  });
+  
+  const cols = [...presetCols, ...customCols];
+  if (cols.length === 0) return showToast('请至少选择或添加一列', 'error');
+  
+  const res = await fetch('/api/admin/subsections', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ section_id: parseInt(sectionId), name, icon, description: desc, sort_order: order, columns: cols })
+  });
+  const data = await res.json();
+  if (data.success) { 
+    showToast('子功能创建成功', 'success'); 
+    loadSubSections(); 
+    document.getElementById('subName').value=''; 
+    document.getElementById('subDesc').value='';
+    // 清空预设列选择
+    document.querySelectorAll('.preset-col-checkbox').forEach(cb => cb.checked = false);
+    // 清空自定义列
+    document.getElementById('subColumns').innerHTML = '';
+  }
+  else showToast(data.error || '失败', 'error');
+}
+async function loadSubSections() {
+  const res = await fetch('/api/admin/subsections');
+  const data = await res.json();
+  const tbody = document.getElementById('subSectionList');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-gray-400">暂无子功能，请在上方创建</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(s => {
+    const iconImg = s.icon_image ? `<img src="/static/uploads/${s.icon_image}" alt="icon" class="w-full h-full object-cover">` : `<span class="text-lg">${s.icon || '📄'}</span>`;
+    const deleteImgBtn = s.icon_image ? `<button onclick="deleteSubSectionIcon(${s.id})" class="text-xs text-red-600 hover:underline">删</button>` : '';
+    return `
+    <tr class="border-b border-gray-50" data-sub-id="${s.id}">
+      <td class="py-2">${s.section_name || '未知'}</td>
+      <td class="py-2"><input type="text" class="sub-name w-full px-2 py-1 border rounded text-sm" value="${s.name}"></td>
+      <td class="py-2"><input type="text" class="sub-icon w-16 px-2 py-1 border rounded text-sm text-center" value="${s.icon}"></td>
+      <td class="py-2">
+        <div class="flex items-center gap-2">
+          <div class="w-10 h-10 rounded bg-gray-100 border overflow-hidden flex items-center justify-center">
+            ${iconImg}
+          </div>
+          <label class="cursor-pointer text-xs text-green-600 hover:underline">
+            📤
+            <input type="file" accept="image/*" class="hidden" onchange="uploadSubSectionIcon(${s.id}, this)">
+          </label>
+          ${deleteImgBtn}
+        </div>
+      </td>
+      <td class="py-2"><input type="text" class="sub-desc w-full px-2 py-1 border rounded text-xs" value="${s.description || ''}" placeholder="描述"></td>
+      <td class="py-2"><input type="number" class="sub-order w-16 px-2 py-1 border rounded text-sm" value="${s.sort_order || 0}"></td>
+      <td class="py-2 space-x-2">
+        <button onclick="updateSubSection(${s.id})" class="text-green-600 hover:underline font-medium">💾 保存</button>
+        <button onclick="deleteSubSection(${s.id}, '${s.name}')" class="text-red-600 hover:underline">🚫 删除</button>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
+async function updateSubSection(id) {
+  const row = document.querySelector(`tr[data-sub-id="${id}"]`);
+  const name = row.querySelector('.sub-name').value.trim();
+  const icon = row.querySelector('.sub-icon').value.trim();
+  const desc = row.querySelector('.sub-desc').value.trim();
+  const order = parseInt(row.querySelector('.sub-order').value) || 0;
+  if (!name) return showToast('子功能名称不能为空', 'error');
+  const res = await fetch(`/api/admin/subsections/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, icon, description: desc, sort_order: order })
+  });
+  const data = await res.json();
+  if (data.success) showToast('子功能修改已保存', 'success');
+  else showToast(data.error || '保存失败', 'error');
+}
+
+async function uploadSubSectionIcon(subsectionId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/upload/subsection_icon/' + subsectionId, { method: 'POST', body: form });
+  const data = await res.json();
+  if (data.success) {
+    showToast('子功能图标上传成功', 'success');
+    loadSubSections();
+  } else {
+    showToast(data.error || '上传失败', 'error');
+  }
+  input.value = '';
+}
+
+async function deleteSubSectionIcon(subsectionId) {
+  if (!confirm('确定删除该子功能图标图片？')) return;
+  const res = await fetch('/api/upload/delete_subsection_icon/' + subsectionId, { method: 'POST' });
+  const data = await res.json();
+  if (data.success) { showToast('已删除', 'success'); loadSubSections(); }
+  else showToast(data.error || '删除失败', 'error');
+}
+async function deleteSubSection(id, name) {
+  if (!confirm(`确定删除子功能 "${name}" 吗？\n该子功能下的所有数据将被清空。`)) return;
+  const res = await fetch(`/api/admin/subsections/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.success) { showToast('已删除', 'success'); loadSubSections(); }
+  else showToast(data.error || '删除失败', 'error');
+}
+
+// 初始化
+addSubColumn();
+addSubColumn();
+loadSubSections();
+</script>
+</body>
+</html>
